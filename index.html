@@ -11,22 +11,27 @@
   }
   /* One row per string – each row occupies 1/6 of the viewport height */
   .stringRow{
-    display:flex;
-    align-items:center;
+    position:relative;                 /* parent for absolute label */
     width:100%;
     height:calc(100vh/6);
+    overflow:hidden;
   }
   canvas{
-    flex:1 1 auto;               /* fill the remaining width */
-    display:block;                /* remove inline‑canvas whitespace */
-    background:#222;            /* fallback colour while we draw */
+    display:block;
+    width:100%; height:100%;           /* fill the whole row */
+    background:#222;                  /* fallback while we draw */
   }
   .noteLabel{
-    flex:0 0 3.5rem;            /* fixed width for the note text */
-    font-size:2.2rem;
+    position:absolute;
+    right:0.5rem;                       /* a little margin from the edge */
+    top:50%;                           /* centre vertically */
+    transform:translateY(-50%);
+    font-size:2.4rem;
     font-weight:bold;
-    text-align:center;
     color:#fff;
+    text-shadow:0 0 6px rgba(0,0,0,0.9);
+    pointer-events:none;              /* clicks go to the canvas */
+    z-index:2;
   }
 </style>
 </head>
@@ -51,21 +56,18 @@ const DISPLAY_CENTS = 50;          // ±50 cents visible left↔right
 const COLS = 21;                   // columns (log‑frequency)
 const ROWS = 10;                   // rows (time)
 
-// helpers for colour conversion
+// colour helpers -------------------------------------------------
 function hueFromCents(c){
   const max = DISPLAY_CENTS;
-  const cLim = Math.max(-max, Math.min(max, c));
+  const lim = Math.max(-max, Math.min(max, c));
   // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
-  return cLim < 0
-    ? 120 * (1 + cLim / max)          // 120 → 0
-    : 120 + 120 * (cLim / max);      // 120 → 240
+  return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
 }
 function lightnessFromCorr(c){
-  // correlation (0‑1) → lightness 30 %‑85 %
-  return 30 + 55 * c;
+  return 30 + 55 * c;               // 0‑1 → 30‑85 %
 }
 function centsToCol(cents){
-  const step = (2 * DISPLAY_CENTS) / (COLS - 1);   // size of one column in cents
+  const step = (2 * DISPLAY_CENTS) / (COLS - 1);
   let col = Math.round((cents + DISPLAY_CENTS) / step);
   if (col < 0) col = 0;
   if (col >= COLS) col = COLS - 1;
@@ -73,10 +75,10 @@ function centsToCol(cents){
 }
 
 /* ---------------------------------------------------------
-   BUILD UI – one canvas + note label per string
+   BUILD UI – one canvas + overlay label per string
    --------------------------------------------------------- */
 const container = document.getElementById('tunerContainer');
-const canvases = [];                     // keep a reference to each canvas
+const canvases = [];                // keep a reference to each canvas
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
@@ -93,7 +95,7 @@ STRINGS.forEach(s => {
    AUDIO + PITCH DETECTION
    --------------------------------------------------------- */
 let audioCtx, analyser, source, highPass, lowPass, rafId;
-const rowIndices = new Array(STRINGS.length).fill(0);   // current time‑row per string
+const rowIndices = new Array(STRINGS.length).fill(0); // current time‑row
 
 async function startTuner(){
   try{
@@ -112,7 +114,7 @@ async function startTuner(){
     lowPass.Q.value = 0.707;
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 4096;               // larger window → more stable pitch
+    analyser.fftSize = 4096;                 // larger window → smoother pitch
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(highPass);
@@ -121,23 +123,22 @@ async function startTuner(){
 
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-    resizeCanvases();                      // set the drawing buffer size
+    resizeCanvases();
     rafId = requestAnimationFrame(update);
   }catch(e){
-    alert('Microphone access error:\n' + e);
+    alert('Microphone access error:\n'+e);
   }
 }
 
 /* ---------------------------------------------------------
-   Resize canvases to match their on‑screen size (pixel‑perfect)
+   Resize canvases to match their displayed size (pixel‑perfect)
    --------------------------------------------------------- */
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
   rows.forEach(row => {
     const canvas = row.querySelector('canvas');
-    canvas.width  = row.clientWidth;    // drawing buffer size
+    canvas.width  = row.clientWidth;
     canvas.height = row.clientHeight;
-    // clear with dark background
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#222';
     ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -151,20 +152,20 @@ window.addEventListener('resize', resizeCanvases);
 function detectPitch(buf, sampleRate){
   const SIZE = buf.length;
   const MAX = Math.floor(SIZE/2);
-  // RMS – discard silence
+  // RMS → discard silence
   let rms = 0;
   for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms/SIZE);
-  if (rms < 0.01) return null;    // too quiet
+  if (rms < 0.01) return null;                 // too quiet
 
   let bestOffset = -1, bestCorr = 0, lastCorr = 1;
   for (let offset=0; offset<MAX; offset++) {
     let corr = 0;
     if (offset + MAX > buf.length) break;
     for (let i=0; i<MAX; i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);      // normalised correlation 0‑1
+    corr = 1 - (corr / MAX);                    // normalised 0‑1
     if (corr > 0.9 && corr > lastCorr) {
-      if (corr > bestCorr) { bestCorr = corr; bestOffset = offset; }
+      if (corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
     }
     lastCorr = corr;
   }
@@ -181,7 +182,6 @@ function update(){
   analyser.getFloatTimeDomainData(buf);
   const pitchInfo = detectPitch(buf, audioCtx.sampleRate);
 
-  // We will always advance the time‑row (so the visual grid scrolls)
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     const ctx = canvas.getContext('2d');
@@ -189,11 +189,11 @@ function update(){
     const colW = canvas.width  / COLS;
     const rowH = canvas.height / ROWS;
 
-    // 1️⃣ Fade the whole canvas a little (older dots become darker)
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';   // alpha controls fade speed
+    /* 1️⃣ Fade the whole canvas a little (older dots darken) */
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';   // tweak alpha for speed of fade
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // 2️⃣ If we have a pitch, draw a new dot in the current row
+    /* 2️⃣ If a pitch is detected, draw a new coloured block */
     if (pitchInfo){
       const {freq, correlation} = pitchInfo;
       const cents = 1200 * Math.log2(freq / s.freq);
@@ -201,13 +201,13 @@ function update(){
       const hue   = hueFromCents(cents);
       const light = lightnessFromCorr(correlation);
       ctx.fillStyle = `hsl(${hue},100%,${light}%)`;
+
       const row = rowIndices[idx];
-      // draw the block at the *bottom‑most* row for row=0, then move up
-      const y = canvas.height - (row + 1) * rowH;
+      const y   = canvas.height - (row + 1) * rowH;   // bottom‑most row = 0
       ctx.fillRect(col * colW, y, colW, rowH);
     }
 
-    // 3️⃣ Advance the row for the next frame (wrap after ROWS)
+    /* 3️⃣ Advance the “time‑row” (wrap after ROWS) */
     rowIndices[idx] = (rowIndices[idx] + 1) % ROWS;
   });
 
@@ -215,10 +215,10 @@ function update(){
 }
 
 /* ---------------------------------------------------------
-   AUTO‑START on page load
+   AUTO‑START on page load (asks for mic permission)
    --------------------------------------------------------- */
 window.addEventListener('load', () => {
-  startTuner();          // asks for microphone permission immediately
+  startTuner();
 });
 </script>
 </body>
