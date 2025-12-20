@@ -43,25 +43,35 @@
 
 <script>
 /* =========================================================
-   1️⃣  PARAMÈTRES
+   1️⃣  GLOBAL DSP CONFIG  (all “signal‑processing” numbers here)
    ========================================================= */
-const DISPLAY_CENTS   = 80;          // ±50 cents left↔right
-const COLS            = 41;          // log‑frequency columns
-const ROWS            = 20;          // time rows (history)
-const UPDATE_INTERVAL = 200;        // ms → ~5 updates / s
+const DSP_CONFIG = {
+  // visualisation grid
+  DISPLAY_CENTS   : 80,          // ±80 cents shown left‑right
+  COLS            : 41,         // log‑frequency columns
+  ROWS            : 20,         // time rows (history)
 
-const HP_CUT   = 70;                // band‑pass: low‑cut (Hz)
-const LP_CUT   = 600;               // band‑pass: high‑cut (Hz)
-const BAND_Q   = 0.707;             // Butterworth‑type Q
+  // timing
+  UPDATE_INTERVAL : 200,       // ms → ~5 updates per second
 
-const OTHER_DIM_FACTOR = 0.5;        // dim factor for non‑active strings
+  // audio filter
+  HP_CUT          : 30,          // high‑pass (Hz) – keep low rumble out, but allow low notes
+  LP_CUT          : 800,         // low‑pass (Hz) – high enough for E4 harmonics
+  BAND_Q         : 0.707,        // Butterworth‑type Q
 
-/* Historique de pitch brut (pour rendre la détection plus robuste) */
-const PITCH_HISTORY_LENGTH = 5;     // how many recent detections we keep
-let pitchHistory = [];              // array of {freq, correlation}
+  // pitch detection
+  FFT_SIZE        : 16384,       // larger FFT → better frequency resolution, especially for high notes
+  CORRELATION_MIN : 0.7,         // minimum correlation to accept a pitch
+  CORRELATION_SMOOTH_ALPHA : 0.4, // 40 % new, 60 % old  →  α = 0.4 (new)
+
+  // UI‑related
+  OTHER_DIM_FACTOR : 0.5,      // dim factor for non‑active strings
+  PITCH_HISTORY_LENGTH : 5,    // raw detection history (for median)
+  SMOOTH_ALPHA_OLD : 0.6       // 60 % old, 40 % new (derived from SMOOTH_ALPHA_NEW)
+};
 
 /* =========================================================
-   2️⃣  GUITAR NOTES
+   2️⃣  GUITAR NOTES (standard tuning)
    ========================================================= */
 const STRINGS = [
   {name:'E2', freq: 82.41},
@@ -92,31 +102,40 @@ STRINGS.forEach(s => {
    4️⃣  AUDIO PIPELINE (band‑pass + analyser)
    ========================================================= */
 let audioCtx, analyser, source, hp, lp;
-let lastUpdate = performance.now();      // timestamp of the last analysis
+let lastUpdate = performance.now();     // timestamp of last analysis
 let rafId = null;
 
 /* histories[string][row] → {col, hue, light, alpha} or null */
-const histories = STRINGS.map(()=>Array(ROWS).fill(null));
+const histories = STRINGS.map(()=>Array(DSP_CONFIG.ROWS).fill(null));
 
+/* smoothing of correlation (exponential) */
+let smoothedCorrelation = null;
+
+/* pitch history for robust median */
+let pitchHistory = [];                 // each entry = {freq, correlation}
+
+/* =========================================================
+   5️⃣  START – request mic, build graph, start loop
+   ========================================================= */
 async function startTuner(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    // ----- band‑pass 70‑450 Hz -----
+    // ----- band‑pass (30 Hz – 800 Hz) -----
     hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = HP_CUT;
-    hp.Q.value = BAND_Q;
+    hp.frequency.value = DSP_CONFIG.HP_CUT;
+    hp.Q.value = DSP_CONFIG.BAND_Q;
 
     lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = LP_CUT;
-    lp.Q.value = BAND_Q;
+    lp.frequency.value = DSP_CONFIG.LP_CUT;
+    lp.Q.value = DSP_CONFIG.BAND_Q;
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 8192;                // wide window → stable pitch
-    analyser.smoothingTimeConstant = 0;    // visual smoothing handled manually
+    analyser.fftSize = DSP_CONFIG.FFT_SIZE;
+    analyser.smoothingTimeConstant = 0;   // we smooth ourselves
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -133,7 +152,7 @@ async function startTuner(){
 }
 
 /* ---------------------------------------------------------
-   5️⃣  Resize canvases to device‑pixel size
+   6️⃣  Resize canvases (pixel‑perfect)
    --------------------------------------------------------- */
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
@@ -149,25 +168,25 @@ function resizeCanvases(){
 window.addEventListener('resize', resizeCanvases);
 
 /* =========================================================
-   6️⃣ AUTOCORRELATION (wide FFT + sub‑sample interpolation)
+   7️⃣  AUTOCORRELATION (wide FFT, sub‑sample interpolation)
    ========================================================= */
 function autoCorrelate(buf, sampleRate){
   const SIZE = buf.length;
   const MAX  = Math.floor(SIZE/2);
 
-  // ----- RMS (silence check) -----
+  // ---- RMS (silence detection) ----
   let rms = 0;
   for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return null;               // silence / too quiet
+  if(rms < 0.01) return null;               // too quiet
 
-  // ----- simple autocorrelation -----
+  // ---- simple autocorrelation ----
   let bestOffset = -1, bestCorr = 0, lastCorr = 1;
   for(let offset=0; offset<MAX; offset++){
     let corr = 0;
     if(offset + MAX > buf.length) break;
     for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);                // 0‑1
+    corr = 1 - (corr / MAX);                 // 0‑1
     if(corr > 0.9 && corr > lastCorr){
       if(corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
     }
@@ -175,7 +194,7 @@ function autoCorrelate(buf, sampleRate){
   }
   if(bestOffset === -1) return null;
 
-  // ----- parabolic interpolation (sub‑sample) -----
+  // ---- parabolic interpolation (sub‑sample) ----
   const left   = bestOffset > 0 ? 1 - Math.abs(corrAt(buf,bestOffset-1)) : 0;
   const centre = 1 - Math.abs(corrAt(buf,bestOffset));
   const right  = (bestOffset+1 < MAX) ? 1 - Math.abs(corrAt(buf,bestOffset+1)) : 0;
@@ -195,10 +214,10 @@ function corrAt(buf, offset){
 }
 
 /* =========================================================
-   7️⃣ HELPERS – colour, lightness, opacity, mapping
+   8️⃣  HELPERS – colour, lightness, opacity, mapping
    ========================================================= */
 function hueFromCents(c){
-  const max = DISPLAY_CENTS;
+  const max = DSP_CONFIG.DISPLAY_CENTS;
   const lim = Math.max(-max, Math.min(max, c));
   // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
   return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
@@ -206,63 +225,76 @@ function hueFromCents(c){
 function lightnessFromCorr(c){               // 10 % → 90 %
   return 10 + 80 * c;
 }
-function alphaFromCorr(c){ return c; }        // opacity proportional to correlation
+function alphaFromCorr(c){ return c; }      // opacity = correlation
 
 function centsToCol(cents){
-  const step = (2*DISPLAY_CENTS) / (COLS-1);
-  let col = Math.round((cents + DISPLAY_CENTS) / step);
+  const step = (2*DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS-1);
+  let col = Math.round((cents + DSP_CONFIG.DISPLAY_CENTS) / step);
   if(col < 0) col = 0;
-  if(col >= COLS) col = COLS-1;
+  if(col >= DSP_CONFIG.COLS) col = DSP_CONFIG.COLS-1;
   return col;
 }
 function centsToX(cents, canvas){
   const half = canvas.width/2;
-  const pxPerCent = half / DISPLAY_CENTS;
+  const pxPerCent = half / DSP_CONFIG.DISPLAY_CENTS;
   let x = Math.round(half + cents * pxPerCent);
   if(x < 0) x = 0;
   if(x >= canvas.width) x = canvas.width-1;
   return x;
 }
 
-/* ---------------------------------------------------------
-   8️⃣  MEDIAN utility (robust average)
-   --------------------------------------------------------- */
+/* =========================================================
+   9️⃣  MEDIAN utility – robust pitch from recent history
+   ========================================================= */
 function median(arr){
   const sorted = arr.slice().sort((a,b)=>a-b);
   const mid = Math.floor(sorted.length/2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
 }
 
-/* ---------------------------------------------------------
-   9️⃣  MAIN LOOP (requestAnimationFrame)
-   --------------------------------------------------------- */
-let lastActiveIdx = -1;          // index of the string that is currently closest
+/* =========================================================
+   10️⃣  MAIN LOOP (requestAnimationFrame)
+   ========================================================= */
+let lastActiveIdx = -1;   // index of the string that is currently closest
 
 function mainLoop(timestamp){
-  // ----- 1️⃣ analyse audio every UPDATE_INTERVAL ms -----
-  if (timestamp - lastUpdate >= UPDATE_INTERVAL){
+  // ---------- 1️⃣ analyse audio every UPDATE_INTERVAL ----------
+  if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
-    const rawInfo = autoCorrelate(buf, audioCtx.sampleRate); // may be null
+    const rawInfo = autoCorrelate(buf, audioCtx.sampleRate); // {freq, correlation} or null
 
-    // store the raw detection (or null) in a short history buffer
+    // keep short raw‑history for robust median
     pitchHistory.push(rawInfo);
-    if(pitchHistory.length > PITCH_HISTORY_LENGTH) pitchHistory.shift();
+    if(pitchHistory.length > DSP_CONFIG.PITCH_HISTORY_LENGTH) pitchHistory.shift();
 
-    // compute a robust pitch from the recent history
+    // median of valid detections
     const valid = pitchHistory.filter(v=>v!==null);
     let robustInfo = null;
     if(valid.length){
-      // median frequency gives resistance to outliers
       const freqs = valid.map(v=>v.freq);
       const cors  = valid.map(v=>v.correlation);
       const medianFreq = median(freqs);
       const medianCorr = median(cors);
-      // we still demand a minimal confidence level
-      if(medianCorr > 0.2) robustInfo = {freq:medianFreq, correlation:medianCorr};
+      if(medianCorr >= DSP_CONFIG.CORRELATION_MIN){
+        robustInfo = {freq:medianFreq, correlation:medianCorr};
+      }
     }
 
-    // ----- 2️⃣ determine which string is the closest (active) -----
+    // ---------- 2️⃣ exponential smoothing of correlation ----------
+    if(robustInfo){
+      if(smoothedCorrelation===null) smoothedCorrelation = robustInfo.correlation;
+      else {
+        const newAlpha = DSP_CONFIG.CORRELATION_SMOOTH_ALPHA;
+        const oldAlpha = 1 - newAlpha;               // 0.6 when newAlpha = 0.4
+        smoothedCorrelation = oldAlpha*smoothedCorrelation + newAlpha*robustInfo.correlation;
+      }
+    }else{
+      // decay when nothing is detected
+      if(smoothedCorrelation!==null) smoothedCorrelation *= DSP_CONFIG.SMOOTH_ALPHA_OLD;
+    }
+
+    // ---------- 3️⃣ determine active string ----------
     let activeIdx = -1;
     let minAbs = Infinity;
     const centsArray = new Array(STRINGS.length).fill(null);
@@ -278,48 +310,48 @@ function mainLoop(timestamp){
           activeIdx = i;
         }
       });
-      if(minAbs > DISPLAY_CENTS) activeIdx = -1; // out of displayable range
+      // safety: ignore if far outside our display window
+      if(minAbs > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
     }
-    lastActiveIdx = activeIdx;               // keep for drawing the big label
+    lastActiveIdx = activeIdx;
 
-    // ----- 3️⃣ update per‑string histories (new row at bottom) -----
-    STRINGS.forEach((s, idx)=>{
+    // ---------- 4️⃣ update per‑string visual histories ----------
+    STRINGS.forEach((s, idx) => {
       let entry = null;
       if(robustInfo){
         const cents = centsArray[idx];
         const col   = centsToCol(cents);
         const hue   = hueFromCents(cents);
-        const baseLight = lightnessFromCorr(robustInfo.correlation);
-        const baseAlpha = alphaFromCorr(robustInfo.correlation);
+        const baseLight = lightnessFromCorr(smoothedCorrelation);
+        const baseAlpha = alphaFromCorr(smoothedCorrelation);
         const light = (activeIdx===idx) ? baseLight
-                                        : baseLight * OTHER_DIM_FACTOR;
+                                        : baseLight * DSP_CONFIG.OTHER_DIM_FACTOR;
         const alpha = (activeIdx===idx) ? baseAlpha
-                                        : baseAlpha * OTHER_DIM_FACTOR;
+                                        : baseAlpha * DSP_CONFIG.OTHER_DIM_FACTOR;
         entry = {col, hue, light, alpha};
       }
       histories[idx].push(entry);
-      if(histories[idx].length > ROWS) histories[idx].shift();
+      if(histories[idx].length > DSP_CONFIG.ROWS) histories[idx].shift();
     });
 
     lastUpdate = timestamp;
   }
 
-  // ----- 4️⃣ draw every animation frame (smooth) -----
+  // ---------- 5️⃣ draw every animation frame ----------
   drawAllCanvases();
-
   rafId = requestAnimationFrame(mainLoop);
 }
 
-/* ---------------------------------------------------------
-   10️⃣ DRAWING ROUTINE
-   --------------------------------------------------------- */
+/* =========================================================
+   11️⃣  DRAWING ROUTINE
+   ========================================================= */
 function drawAllCanvases(){
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     const ctx = canvas.getContext('2d');
 
-    const colW = canvas.width / COLS;
-    const rowH = canvas.height / ROWS;
+    const colW = canvas.width / DSP_CONFIG.COLS;
+    const rowH = canvas.height / DSP_CONFIG.ROWS;
 
     // 1️⃣ background
     ctx.fillStyle = '#222';
@@ -339,7 +371,7 @@ function drawAllCanvases(){
     ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
     ctx.stroke();
 
-    // 3️⃣ draw history rows (oldest top, newest bottom)
+    // 3️⃣ draw history rows (oldest at top, newest at bottom)
     histories[idx].forEach((entry, rowIdxHist) => {
       if(!entry) return;
       ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
@@ -347,9 +379,9 @@ function drawAllCanvases(){
       const y = rowIdxHist * rowH;
       ctx.fillRect(entry.col * colW, y, colW, rowH);
     });
-    ctx.globalAlpha = 1;   // reset alpha for later text
+    ctx.globalAlpha = 1;   // reset alpha for text
 
-    // 4️⃣ if this string is the active one, draw its note name in the centre
+    // 4️⃣ big note name in centre for the active string
     if(lastActiveIdx === idx && histories[idx].length){
       const latest = histories[idx][histories[idx].length-1];
       if(latest){
@@ -366,7 +398,7 @@ function drawAllCanvases(){
 }
 
 /* ---------------------------------------------------------
-   11️⃣  Auto‑start on page load
+   12️⃣  AUTO‑START on page load
    --------------------------------------------------------- */
 window.addEventListener('load', startTuner);
 </script>
