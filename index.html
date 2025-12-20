@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Web Guitar Tuner – A (440 Hz)</title>
+<style>
+  body {
+    margin:0; font-family:Arial,Helvetica,sans-serif;
+    background:#222; color:#fff; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; height:100vh;
+  }
+  button {
+    padding:1rem 2rem; font-size:1.2rem; cursor:pointer;
+    border:none; border-radius:8px; background:#0a84ff; color:#fff;
+  }
+  #freq { font-size:3rem; margin:1rem 0; }
+  #statusBar {
+    width:80%; max-width:400px; height:20px;
+    border-radius:4px; background:#555;
+    overflow:hidden;
+  }
+  #indicator {
+    height:100%; width:0%; transition:width .1s ease-out;
+  }
+</style>
+</head>
+<body>
+
+<button id="startBtn">🎤 Click to start</button>
+<div id="freq">– Hz</div>
+<div id="statusBar"><div id="indicator"></div></div>
+
+<script>
+/* ==== SETTINGS ==== */
+const TARGET_FREQ = 440;               // A4
+const TOLERANCE_CENTS = 1;             // green zone (≈0.06 Hz at 440 Hz)
+const CLOSE_CENTS   = 10;              // yellow zone
+
+/* ==== UI helpers ==== */
+const startBtn = document.getElementById('startBtn');
+const freqEl   = document.getElementById('freq');
+const indicator = document.getElementById('indicator');
+
+function setIndicator(cents) {
+  const abs = Math.abs(cents);
+  let color = '#ff3b30';              // red
+  if (abs <= TOLERANCE_CENTS) color = '#30d158'; // green
+  else if (abs <= CLOSE_CENTS)   color = '#ffcc00'; // yellow
+  indicator.style.background = color;
+  // width proportional to how far off we are (capped at 100%)
+  const maxCents = 50;                // arbitrary cap for visual scaling
+  const width = Math.min(100, (abs / maxCents) * 100);
+  indicator.style.width = width + '%';
+}
+
+/* ==== Pitch detection (autocorrelation) ==== */
+function autoCorrelate(buf, sampleRate) {
+  // Implementation notes:
+  //  * buf is a Float32Array of time‑domain audio samples.
+  //  * Returns frequency in Hz or -1 if no pitch is detected.
+  const SIZE = buf.length;
+  const MAX_SAMPLES = Math.floor(SIZE/2);
+  let bestOffset = -1;
+  let bestCorrelation = 0;
+  let rms = 0;
+
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1; // too quiet
+
+  let lastCorrelation = 1;
+  for (let offset = 0; offset < MAX_SAMPLES; offset++) {
+    let correlation = 0;
+    for (let i = 0; i < MAX_SAMPLES; i++) {
+      correlation += Math.abs(buf[i] - buf[i + offset]);
+    }
+    correlation = 1 - (correlation / MAX_SAMPLES);
+    if (correlation > 0.9 && correlation > lastCorrelation) {
+      if (correlation > bestCorrelation) {
+        bestCorrelation = correlation;
+        bestOffset = offset;
+      }
+    }
+    lastCorrelation = correlation;
+  }
+
+  if (bestOffset === -1) return -1;
+
+  const pitch = sampleRate / bestOffset;
+  return pitch;
+}
+
+/* ==== Main audio pipeline ==== */
+let audioContext, analyser, mediaStreamSource, rafId;
+
+async function startTuner() {
+  startBtn.disabled = true;
+  startBtn.textContent = '⏳ Starting…';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    mediaStreamSource = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    mediaStreamSource.connect(analyser);
+
+    // kick off the animation loop
+    updatePitch();
+    startBtn.style.display = 'none';
+  } catch (e) {
+    alert('Could not access microphone: ' + e.message);
+    startBtn.disabled = false;
+    startBtn.textContent = '🎤 Click to start';
+  }
+}
+
+/* ==== Loop that reads the analyser and updates UI ==== */
+function updatePitch() {
+  const bufferLength = analyser.fftSize;
+  const data = new Float32Array(bufferLength);
+  analyser.getFloatTimeDomainData(data);
+
+  const freq = autoCorrelate(data, audioContext.sampleRate);
+  if (freq !== -1) {
+    const cents = 1200 * Math.log2(freq / TARGET_FREQ);
+    freqEl.textContent = freq.toFixed(2) + ' Hz';
+    setIndicator(cents);
+  } else {
+    freqEl.textContent = '— Hz';
+    indicator.style.width = '0%';
+  }
+
+  rafId = requestAnimationFrame(updatePitch);
+}
+
+/* ==== Event listeners ==== */
+startBtn.addEventListener('click', startTuner);
+
+// Clean‑up when the page is hidden (optional, but nice)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && rafId) cancelAnimationFrame(rafId);
+});
+</script>
+
+</body>
+</html>
