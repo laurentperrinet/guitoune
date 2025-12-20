@@ -56,18 +56,19 @@ const STRINGS = [
 const DISPLAY_CENTS = 50;          // ±50 cents shown left↔right
 const COLS = 21;                  // columns (log‑frequency)
 const ROWS = 10;                  // rows (time)
-const UPDATE_INTERVAL = 100;      // ms – UI updates 10 times per second
+const UPDATE_INTERVAL = 100;     // UI refresh every 100 ms (10 Hz)
 
-/* Band‑pass limits – unchanged (they work well) */
-const HP_CUT = 70;                // Hz
-const LP_CUT = 450;               // Hz
-const BAND_Q = 0.707;             // Butterworth‑ish
+const HP_CUT = 70;                // band‑pass low‑cut
+const LP_CUT = 450;               // band‑pass high‑cut
+const BAND_Q = 0.707;             // Butterworth‑type Q
+
+const OTHER_DIM_FACTOR = 0.2;      // how much to dim the “non‑active” strings
 
 /* ---------------------------------------------------------
    UI – one canvas + overlay label per string
    --------------------------------------------------------- */
 const container = document.getElementById('tunerContainer');
-const canvases = [];                // keep the canvas references
+const canvases = [];                // keep canvas refs
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
@@ -83,14 +84,14 @@ STRINGS.forEach(s => {
    AUDIO GRAPH (band‑pass + analyser)
    --------------------------------------------------------- */
 let audioCtx, analyser, source, hp, lp, intervalId;
-const rowIdx = new Array(STRINGS.length).fill(0); // current scrolling row per string
+const rowIdx = new Array(STRINGS.length).fill(0); // scrolling row per string
 
 async function startTuner(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    /* ----- band‑pass (70 Hz – 450 Hz) ----- */
+    // ----- band‑pass (70 Hz – 450 Hz) -----
     hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = HP_CUT;
@@ -102,8 +103,8 @@ async function startTuner(){
     lp.Q.value = BAND_Q;
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 8192;                // wider window → more robust pitch
-    analyser.smoothingTimeConstant = 0;    // we handle fading ourselves
+    analyser.fftSize = 8192;                 // wider window → more robust pitch
+    analyser.smoothingTimeConstant = 0;      // we handle fading ourselves
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -122,7 +123,7 @@ async function startTuner(){
 }
 
 /* ---------------------------------------------------------
-   Resize canvases to actual pixel size
+   Resize canvases to match device pixel dimensions
    --------------------------------------------------------- */
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
@@ -138,25 +139,25 @@ function resizeCanvases(){
 window.addEventListener('resize', resizeCanvases);
 
 /* ---------------------------------------------------------
-   AUTOCORRELATION pitch detector (wide FFT, sub‑sample)
+   AUTOCORRELATION (wide FFT, sub‑sample interpolation)
    --------------------------------------------------------- */
 function autoCorrelate(buf, sampleRate){
   const SIZE = buf.length;
   const MAX  = Math.floor(SIZE/2);
 
-  // ---- RMS – silence detection ----
+  // ---- RMS (silence test) ----
   let rms = 0;
   for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return null;            // too quiet
+  if(rms < 0.01) return null;                 // too quiet
 
-  // ---- find best lag via simple autocorrelation ----
+  // ---- simple autocorrelation ----
   let bestOffset = -1, bestCorr = 0, lastCorr = 1;
   for(let offset=0; offset<MAX; offset++){
     let corr = 0;
-    if(offset + MAX > buf.length) break;   // safety
+    if(offset + MAX > buf.length) break;
     for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);               // 0‑1
+    corr = 1 - (corr / MAX);                  // 0‑1
     if(corr > 0.9 && corr > lastCorr){
       if(corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
     }
@@ -164,19 +165,19 @@ function autoCorrelate(buf, sampleRate){
   }
   if(bestOffset === -1) return null;
 
-  // ---- parabolic interpolation (sub‑sample accuracy) ----
-  const left  = bestOffset > 0 ? 1 - Math.abs(correlationAt(buf,bestOffset-1)) : 0;
-  const centre= 1 - Math.abs(correlationAt(buf,bestOffset));
-  const right = (bestOffset+1 < MAX) ? 1 - Math.abs(correlationAt(buf,bestOffset+1)) : 0;
+  // ---- parabolic interpolation (sub‑sample) ----
+  const left   = bestOffset > 0 ? 1 - Math.abs(corrAt(buf,bestOffset-1)) : 0;
+  const centre = 1 - Math.abs(corrAt(buf,bestOffset));
+  const right  = (bestOffset+1 < MAX) ? 1 - Math.abs(corrAt(buf,bestOffset+1)) : 0;
   const denom = (left - 2*centre + right);
   let delta = 0;
-  if (denom !== 0) delta = 0.5 * (left - right) / denom;
+  if(denom !== 0) delta = 0.5 * (left - right) / denom;
   const refined = bestOffset + delta;
 
   const pitch = sampleRate / refined;
   return {freq:pitch, correlation:bestCorr};
 }
-function correlationAt(buf, offset){
+function corrAt(buf, offset){
   const MAX = Math.floor(buf.length/2);
   let corr = 0;
   for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
@@ -212,11 +213,31 @@ function centsToX(cents, canvas){
    MAIN UPDATE – runs every UPDATE_INTERVAL (100 ms)
    --------------------------------------------------------- */
 function update(){
-  // Grab a fresh time‑domain buffer
   const buf = new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(buf);
   const pitchInfo = autoCorrelate(buf, audioCtx.sampleRate); // {freq, correlation} or null
 
+  // ---- Determine which string is the “active” one (closest cents) ----
+  let activeIdx = -1;
+  let smallestAbsCents = Infinity;
+  const centsArray = new Array(STRINGS.length).fill(null); // store per‑string cents
+
+  if(pitchInfo){
+    const {freq} = pitchInfo;
+    STRINGS.forEach((s, i) => {
+      const cents = 1200 * Math.log2(freq / s.freq);
+      centsArray[i] = cents;
+      const abs = Math.abs(cents);
+      if(abs < smallestAbsCents){
+        smallestAbsCents = abs;
+        activeIdx = i;
+      }
+    });
+    // If the best match is more than DISPLAY_CENTS away, treat as “no active string”
+    if(smallestAbsCents > DISPLAY_CENTS) activeIdx = -1;
+  }
+
+  // ---- Draw each canvas -------------------------------------------------
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     const ctx = canvas.getContext('2d');
@@ -224,39 +245,43 @@ function update(){
     const colW = canvas.width / COLS;
     const rowH = canvas.height / ROWS;
 
-    /* 1️⃣ Fade previous content – a gentle darkening */
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';               // older dots become dimmer
+    // 1️⃣ fade previous content
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    /* 2️⃣ Draw the three vertical guide lines (always visible) */
+    // 2️⃣ vertical guide lines (always)
     const centreX = canvas.width/2;
-    const leftX   = centsToX(-10, canvas);   // -10 cents (orange)
-    const rightX  = centsToX(10,  canvas);   // +10 cents (orange)
+    const leftX   = centsToX(-10, canvas);
+    const rightX  = centsToX(10, canvas);
 
-    ctx.strokeStyle = '#30d158'; ctx.lineWidth = 2;   // centre – green
+    ctx.strokeStyle = '#30d158'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(centreX,0); ctx.lineTo(centreX,canvas.height);
     ctx.stroke();
 
-    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1;   // outer – orange
+    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(leftX,0); ctx.lineTo(leftX,canvas.height);
     ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
     ctx.stroke();
 
-    /* 3️⃣ If a pitch is present, draw a coloured block for this string */
+    // 3️⃣ draw a coloured block if we have a pitch
     if(pitchInfo){
-      const {freq, correlation} = pitchInfo;
-      const cents = 1200 * Math.log2(freq / s.freq);
-      const col   = centsToCol(cents);
+      const cents = centsArray[idx];
       const hue   = hueFromCents(cents);
-      const light = lightnessFromCorr(correlation);
+      // base lightness from correlation
+      let light   = lightnessFromCorr(pitchInfo.correlation);
+      // dim non‑active strings
+      if(activeIdx !== -1 && idx !== activeIdx){
+        light *= OTHER_DIM_FACTOR;          // make them much darker
+      }
       ctx.fillStyle = `hsl(${hue},100%,${light}%)`;
 
+      const col = centsToCol(cents);
       const row = rowIdx[idx];
-      const y   = canvas.height - (row + 1) * rowH;   // bottom row = 0
+      const y   = canvas.height - (row + 1) * rowH; // bottom‑most row = 0
       ctx.fillRect(col * colW, y, colW, rowH);
     }
 
-    /* 4️⃣ Advance the scrolling row (wrap after ROWS) */
+    // 4️⃣ advance the scrolling row
     rowIdx[idx] = (rowIdx[idx] + 1) % ROWS;
   });
 }
