@@ -2,29 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Web Guitar Tuner – 6 Strings (log‑cents trace)</title>
+<title>Mobile‑Friendly 6‑String Guitar Tuner</title>
 <style>
   body{
     margin:0; font-family:Arial,Helvetica,sans-serif;
     background:#111; color:#eee;
     display:flex; flex-direction:column; align-items:center;
-    padding:1rem;
+    padding:0.8rem;
   }
   button{
-    margin:0.8rem; padding:0.7rem 1.4rem; font-size:1.1rem;
+    margin:0.7rem; padding:0.7rem 1.2rem; font-size:1.1rem;
     cursor:pointer; border:none; border-radius:6px;
     background:#0a84ff; color:#fff;
   }
   .stringBlock{
-    margin:0.6rem 0;
+    margin:0.5rem 0;
     text-align:center;
   }
-  .title{font-size:1.1rem; margin-bottom:0.2rem;}
+  .title{font-size:1rem; margin-bottom:0.15rem;}
   canvas{
     background:#222; border:2px solid #555; border-radius:4px;
+    /* make the canvas a little larger for phones */
+    width:560px; height:150px;
   }
   #legend{
-    margin-top:0.8rem; font-size:0.85rem; color:#bbb;
+    margin-top:0.6rem; font-size:0.85rem; color:#bbb;
   }
 </style>
 </head>
@@ -35,8 +37,8 @@
 <div id="tunerContainer"></div>
 
 <div id="legend">
-  <span style="color:#30d158;">●</span> ≤ 1 cent&nbsp;&nbsp;
-  <span style="color:#ffcc00;">●</span> ≤ 10 cents&nbsp;&nbsp;
+  <span style="color:#30d158;">●</span> ≤ 1 cent &nbsp;
+  <span style="color:#ffcc00;">●</span> ≤ 10 cents &nbsp;
   <span style="color:#ff3b30;">●</span> > 10 cents
 </div>
 
@@ -53,64 +55,107 @@ const STRINGS = [
   {name:'E4 (high)', freq:329.63}
 ];
 
-const GREEN_CENTS   = 1;   // ≤ 1 cent → green
-const YELLOW_CENTS  = 10;  // ≤ 10 cents → yellow
-const DISPLAY_CENTS = 50;  // ±50 cents = about half a semitone (visual window)
+const GREEN_CENTS   = 1;    // ≤ 1 cent → green
+const YELLOW_CENTS  = 10;   // ≤ 10 cents → yellow
+const DISPLAY_CENTS = 50;    // ±50 cents visible on the canvas
+const BAR_WIDTH     = 3;    // width of the “pixel” we draw (px)
+const SAMPLE_BUFFER = 4096; // analyser.fftSize – larger = more stable
 
 /* ---------------------------------------------------------
-   2️⃣ BUILD THE UI – one block + canvas for each string
+   2️⃣ BUILD UI – one block + canvas per string
    --------------------------------------------------------- */
 const container = document.getElementById('tunerContainer');
-
 STRINGS.forEach((s,i) => {
   const block = document.createElement('div');
   block.className = 'stringBlock';
   block.innerHTML = `
     <div class="title">${s.name} – <span id="freq${i}">– Hz</span></div>
-    <canvas id="canvas${i}" width="500" height="120"></canvas>
+    <canvas id="canvas${i}" width="560" height="150"></canvas>
   `;
   container.appendChild(block);
 });
 
 /* ---------------------------------------------------------
-   3️⃣ HELPERS – colour & cents → X‑pixel conversion
+   3️⃣ HELPERS – colour, cents → X‑pixel, drawing background
    --------------------------------------------------------- */
 function colourFromCents(c) {
   const a = Math.abs(c);
-  if (a <= GREEN_CENTS)   return '#30d158';   // green
-  if (a <= YELLOW_CENTS)  return '#ffcc00';   // yellow
-  return '#ff3b30';                         // red
+  if (a <= GREEN_CENTS)   return '#30d158';
+  if (a <= YELLOW_CENTS)  return '#ffcc00';
+  return '#ff3b30';
 }
-
-/* Map a cents offset to a pixel coordinate inside a given canvas   */
 function centsToX(cents, canvas) {
   const half = canvas.width / 2;
-  const pxPerCent = half / DISPLAY_CENTS;   // linear in cents
+  const pxPerCent = half / DISPLAY_CENTS;
   let x = Math.round(half + cents * pxPerCent);
   if (x < 0) x = 0;
   if (x >= canvas.width) x = canvas.width - 1;
   return x;
 }
+function drawCanvasBackground(idx) {
+  const canvas = document.getElementById(`canvas${idx}`);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0,0,w,h);
+
+  // centre line (target pitch)
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w/2,0);
+  ctx.lineTo(w/2,h);
+  ctx.stroke();
+
+  // optional tick marks every 10 cents
+  const step = 10;
+  const pxPerCent = (w/2) / DISPLAY_CENTS;
+  ctx.fillStyle = '#777';
+  ctx.font = '9px Arial';
+  ctx.textBaseline = 'top';
+  for (let c = -DISPLAY_CENTS; c <= DISPLAY_CENTS; c += step) {
+    const x = w/2 + c * pxPerCent;
+    ctx.fillRect(x-0.5,0,1,h);
+    if (c !== 0) {
+      ctx.fillText((c>0?`+${c}`:`${c}`), x-12, 2);
+    }
+  }
+}
 
 /* ---------------------------------------------------------
-   4️⃣ SIMPLE AUTOCORRELATION PITCH DETECTOR
+   4️⃣ SCROLL CANVAS (one pixel row upward)
+   --------------------------------------------------------- */
+function scrollCanvasUp(canvas) {
+  const ctx = canvas.getContext('2d');
+  const img = ctx.getImageData(0,1,canvas.width,canvas.height-1);
+  ctx.putImageData(img,0,0);
+  // clear the new bottom row (where the fresh bar will be drawn)
+  ctx.clearRect(0,canvas.height-1,canvas.width,1);
+}
+
+/* ---------------------------------------------------------
+   5️⃣ IMPROVED AUTOCORRELATION PITCH DETECTOR
+   ---------------------------------------------------------
+   • Uses a larger buffer (4096 samples ≈ 92 ms at 44.1 kHz).  
+   • After finding the best lag, performs a simple **parabolic interpolation**  
+     around the peak to obtain sub‑sample accuracy.  
+   • Returns –1 if no reliable pitch is found.
    --------------------------------------------------------- */
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
-  const MAX_SAMPLES = Math.floor(SIZE / 2);
-  let bestOffset = -1, bestCorrelation = 0, rms = 0;
-
-  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  const MAX_SAMPLES = Math.floor(SIZE/2);
+  let rms = 0;
+  for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1;               // silence / too quiet
+  if (rms < 0.01) return -1;                 // too quiet
 
-  let lastCorrelation = 1;
+  let bestOffset = -1, bestCorrelation = 0, lastCorrelation = 1;
   for (let offset = 0; offset < MAX_SAMPLES; offset++) {
     let correlation = 0;
-    // Guard against out‑of‑bounds – this is the fix that stopped crashes
+    // early‑exit if we would read off the end of the buffer
     if (offset + MAX_SAMPLES > buf.length) break;
-    for (let i = 0; i < MAX_SAMPLES; i++) {
-      correlation += Math.abs(buf[i] - buf[i + offset]);
+    for (let i=0; i<MAX_SAMPLES; i++) {
+      correlation += Math.abs(buf[i] - buf[i+offset]);
     }
     correlation = 1 - (correlation / MAX_SAMPLES);
     if (correlation > 0.9 && correlation > lastCorrelation) {
@@ -122,55 +167,35 @@ function autoCorrelate(buf, sampleRate) {
     lastCorrelation = correlation;
   }
   if (bestOffset === -1) return -1;
-  return sampleRate / bestOffset;
-}
 
-/* ---------------------------------------------------------
-   5️⃣ CANVAS BACKGROUND (grid + centre line)
-   --------------------------------------------------------- */
-function drawCanvasBackground(idx) {
-  const canvas = document.getElementById(`canvas${idx}`);
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.fillStyle = '#222';
-  ctx.fillRect(0,0,w,h);
+  // -------- Parabolic interpolation around the peak ----------
+  // y(-1), y(0), y(+1) where 0 is bestOffset
+  const left  = bestOffset > 0 ? 1 - Math.abs(autoCorrelateAt(buf,bestOffset-1)) : 0;
+  const center= 1 - Math.abs(autoCorrelateAt(buf,bestOffset));
+  const right = (bestOffset+1 < MAX_SAMPLES) ? 1 - Math.abs(autoCorrelateAt(buf,bestOffset+1)) : 0;
 
-  // centre (target pitch) line
-  ctx.strokeStyle = '#555';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(w/2,0);
-  ctx.lineTo(w/2,h);
-  ctx.stroke();
-
-  // tick marks every 10 cents (optional)
-  const step = 10;
-  const pxPerCent = (w/2) / DISPLAY_CENTS;
-  ctx.fillStyle = '#777';
-  ctx.font = '9px Arial';
-  ctx.textBaseline = 'top';
-  for (let c = -DISPLAY_CENTS; c <= DISPLAY_CENTS; c += step) {
-    const x = w/2 + c * pxPerCent;
-    ctx.fillRect(x-0.5,0,1,h);
-    if (c !== 0) {
-      ctx.fillText((c>0?`+${c}`:`${c}`), x-10, 2);
-    }
+  // vertex formula: x0 = 0.5 * (left - right) / (left - 2*center + right)
+  const denominator = (left - 2*center + right);
+  let delta = 0;
+  if (denominator !== 0) {
+    delta = 0.5 * (left - right) / denominator;
   }
+  const refinedOffset = bestOffset + delta;
+  return sampleRate / refinedOffset;
+}
+
+/* Helper – raw correlation (no normalisation) used only for interpolation */
+function autoCorrelateAt(buf, offset) {
+  const MAX_SAMPLES = Math.floor(buf.length/2);
+  let correlation = 0;
+  for (let i = 0; i < MAX_SAMPLES; i++) {
+    correlation += Math.abs(buf[i] - buf[i+offset]);
+  }
+  return correlation / MAX_SAMPLES;
 }
 
 /* ---------------------------------------------------------
-   6️⃣ SCROLL ONE PIXEL UP (time axis)
-   --------------------------------------------------------- */
-function scrollCanvasUp(canvas) {
-  const ctx = canvas.getContext('2d');
-  const img = ctx.getImageData(0,1,canvas.width,canvas.height-1);
-  ctx.putImageData(img,0,0);
-  // clear the new bottom row (where we will draw the fresh data)
-  ctx.clearRect(0,canvas.height-1,canvas.width,1);
-}
-
-/* ---------------------------------------------------------
-   7️⃣ AUDIO SETUP & MAIN LOOP
+   6️⃣ AUDIO SETUP & MAIN LOOP
    --------------------------------------------------------- */
 let audioCtx, analyser, source, rafId;
 
@@ -178,19 +203,17 @@ async function startTuner() {
   const startBtn = document.getElementById('startBtn');
   startBtn.disabled = true;
   startBtn.textContent = '⏳ Starting…';
-
   try {
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    /* Safari/Chrome on iOS keep the context suspended until we resume it */
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     source   = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
+    analyser.fftSize = SAMPLE_BUFFER;       // bigger buffer for stability
     source.connect(analyser);
 
-    // draw the grid for each canvas *after* the audio has been created
+    // draw background for each canvas now that they exist
     STRINGS.forEach((_,i) => drawCanvasBackground(i));
 
     rafId = requestAnimationFrame(update);
@@ -203,7 +226,7 @@ async function startTuner() {
 }
 
 /* ---------------------------------------------------------
-   8️⃣ UPDATE LOOP – read mic, detect pitch, paint canvases
+   7️⃣ UPDATE LOOP – read mic, detect pitch, paint strips
    --------------------------------------------------------- */
 function update() {
   const buffer = new Float32Array(analyser.fftSize);
@@ -211,35 +234,33 @@ function update() {
   const pitch = autoCorrelate(buffer, audioCtx.sampleRate); // Hz or -1
 
   if (pitch !== -1) {
-    // We have a pitch – update every string visualiser
     STRINGS.forEach((stringInfo, idx) => {
       const cents = 1200 * Math.log2(pitch / stringInfo.freq);
       const canvas = document.getElementById(`canvas${idx}`);
       const freqEl = document.getElementById(`freq${idx}`);
 
-      // numeric read‑out (rounded)
       freqEl.textContent = pitch.toFixed(2) + ' Hz';
 
-      // scroll then draw the newest column
       scrollCanvasUp(canvas);
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = colourFromCents(cents);
-      const x = centsToX(cents, canvas);
-      ctx.fillRect(x, canvas.height-1, 1, 1);
+      const centreX = centsToX(cents, canvas);
+
+      // draw a BAR_WIDTH‑pixel‑wide vertical bar at the bottom
+      ctx.fillRect(centreX, canvas.height-1, BAR_WIDTH, 1);
     });
   } else {
-    // No reliable pitch – just scroll blank lines
+    // No pitch – just scroll blank rows
     STRINGS.forEach((_, idx) => {
       const canvas = document.getElementById(`canvas${idx}`);
       scrollCanvasUp(canvas);
     });
   }
-
   rafId = requestAnimationFrame(update);
 }
 
 /* ---------------------------------------------------------
-   9️⃣ EVENT LISTENERS & Cleanup
+   8️⃣ CLEAN‑UP & EVENT LISTENERS
    --------------------------------------------------------- */
 document.getElementById('startBtn').addEventListener('click', startTuner);
 document.addEventListener('visibilitychange', () => {
