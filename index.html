@@ -39,44 +39,26 @@
 </style>
 </head>
 <body>
-
 <div id="tunerContainer"></div>
-
 <script>
-/*=================================================================
-   1️⃣ GLOBAL DSP CONFIG – every field now has a short description.
-=================================================================*/
+/*============== GLOBAL DSP CONFIG =================*/
 const DSP_CONFIG = {
-  /* Cents shown on each side of the centre. 100 → ±1 semitone. */
-  DISPLAY_CENTS   : 100,
-  /* Number of frequency columns (horizontal resolution). */
-  COLS            : 35,
-  /* Number of time rows kept (vertical resolution). */
-  ROWS            : 30,
-  /* How often we run the heavy pitch analysis (ms). */
-  UPDATE_INTERVAL : 100,
-  /* Band‑pass limits (Hz). */
+  DISPLAY_CENTS   : 100,          // ±1 semitone shown
+  COLS            : 35,           // horizontal resolution
+  ROWS            : 30,           // vertical history length
+  UPDATE_INTERVAL : 100,          // ms between heavy analyses
   HP_CUT          : 30,
-  LP_CUT          : 1500,          // still high enough for B3/E4
-  /* Q‑factor for the two band‑pass filters. */
+  LP_CUT          : 1500,
   BAND_Q          : 0.707,
-  /* FFT size – larger = finer frequency bins, more CPU. */
   FFT_SIZE        : 16384,
-  /* Minimum correlation to accept a pitch. Lower = less “holes”. */
   CORRELATION_MIN : 0.05,
-  /* Weight of the newest correlation when smoothing (0 → 1). */
-  CORRELATION_SMOOTH_ALPHA : 0.2,   // smoother colour evolution
-  /* Dim factor for strings that are not the active one. */
+  CORRELATION_SMOOTH_ALPHA : 0.2,
   OTHER_DIM_FACTOR : 0.3,
-  /* How many raw pitch detections we keep for the median filter. */
   PITCH_HISTORY_LENGTH : 20,
-  /* Weight of the old correlation when no pitch is detected. */
   SMOOTH_ALPHA_OLD : 0.8
 };
 
-/*=================================================================
-   2️⃣ GUITAR NOTES (standard tuning)
-=================================================================*/
+/*============== GUITAR NOTES (standard tuning) ===============*/
 const STRINGS = [
   {name:'E2', freq: 82.41},
   {name:'A2', freq:110.00},
@@ -86,12 +68,10 @@ const STRINGS = [
   {name:'E4', freq:329.63}
 ];
 
-/*=================================================================
-   3️⃣ UI – one canvas + overlay label per string
-=================================================================*/
+/*============== UI – canvas + overlay label per string ===============*/
 const container   = document.getElementById('tunerContainer');
-const canvases    = [];                 // canvas references
-const noteLabels  = [];                 // <div class="noteLabel"> references
+const canvases    = [];
+const noteLabels  = [];
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
@@ -104,54 +84,45 @@ STRINGS.forEach(s => {
   noteLabels.push(row.querySelector('.noteLabel'));
 });
 
-/*=================================================================
-   4️⃣ AUDIO PIPELINE – mic → HP → LP → high‑shelf → analyser
-=================================================================*/
+/*============== AUDIO PIPELINE =================*/
 let audioCtx, analyser, source, hp, lp, preEmphasis;
-let lastUpdate = performance.now();     // timestamp of the last analysis
+let lastUpdate = performance.now();
 let rafId = null;
 
 /* histories[string][row] → {col, hue, light, alpha} or null */
 const histories = STRINGS.map(()=>Array(DSP_CONFIG.ROWS).fill(null));
 
-/* Exponential smoothing of the correlation value (for colour/brightness). */
+/* exponential smoothing of the correlation (colour/brightness) */
 let smoothedCorrelation = null;
 
-/* Short‑term pitch history – used for a robust median filter. */
+/* short‑term pitch history – used for median filter */
 let pitchHistory = [];
 
-/*=================================================================
-   5️⃣ START – request microphone, build graph, start animation loop
-=================================================================*/
+/*============== START – request mic, build graph, start loop ===============*/
 async function startTuner(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    /* ---------- high‑pass (30 Hz) ---------- */
     hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = DSP_CONFIG.HP_CUT;
     hp.Q.value = DSP_CONFIG.BAND_Q;
 
-    /* ---------- low‑pass (1500 Hz) ---------- */
     lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = DSP_CONFIG.LP_CUT;
     lp.Q.value = DSP_CONFIG.BAND_Q;
 
-    /* ---------- high‑shelf “pre‑emphasis” ---------- */
     preEmphasis = audioCtx.createBiquadFilter();
     preEmphasis.type = 'highshelf';
     preEmphasis.frequency.value = 1000;
     preEmphasis.gain.value = 6;   // +6 dB
 
-    /* ---------- analyser (FFT) ---------- */
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0;   // we perform our own smoothing
+    analyser.smoothingTimeConstant = 0;   // we do our own smoothing
 
-    /* ---------- connect the graph ---------- */
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
     hp.connect(lp);
@@ -167,9 +138,7 @@ async function startTuner(){
   }
 }
 
-/*=================================================================
-   6️⃣ Resize canvases – make the drawing buffer match the displayed size
-=================================================================*/
+/*============== Resize canvases ===============*/
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
   rows.forEach(row => {
@@ -183,43 +152,35 @@ function resizeCanvases(){
 }
 window.addEventListener('resize', resizeCanvases);
 
-/*=================================================================
-   7️⃣ AUTOCORRELATION – core pitch‑detection algorithm
-=================================================================*/
+/*============== AUTOCORRELATION =================*/
 function autoCorrelate(buf, sampleRate){
   const SIZE = buf.length;
   const MAX  = Math.floor(SIZE/2);
-
-  /* ---- RMS (used for the loudness dot – now ignored) ---- */
   let rms = 0;
   for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return null;               // signal too quiet → ignore
+  if(rms < 0.01) return null;               // signal too quiet
 
-  /* ---- simple autocorrelation – find the lag with highest similarity ---- */
   let bestOffset = -1, bestCorr = 0, lastCorr = 1;
   for(let offset=0; offset<MAX; offset++){
     let corr = 0;
     if(offset + MAX > buf.length) break;
     for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);                 // normalise to 0‑1
+    corr = 1 - (corr / MAX);
     if(corr > 0.9 && corr > lastCorr){
       if(corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
     }
     lastCorr = corr;
   }
-  if(bestOffset === -1) return null;        // no clear peak
+  if(bestOffset === -1) return null;
 
-  /* ---- parabolic interpolation – sub‑sample precision ---- */
-  const left   = bestOffset > 0 ? 1 - Math.abs(corrAt(buf,bestOffset-1)) : 0;
-  const centre = 1 - Math.abs(corrAt(buf,bestOffset));
-  const right  = (bestOffset+1 < MAX) ? 1 - Math.abs(corrAt(buf,bestOffset+1)) : 0;
-  const denom = (left - 2*centre + right);
+  const left   = bestOffset>0 ? 1-Math.abs(corrAt(buf,bestOffset-1)) : 0;
+  const centre = 1-Math.abs(corrAt(buf,bestOffset));
+  const right  = (bestOffset+1<MAX) ? 1-Math.abs(corrAt(buf,bestOffset+1)) : 0;
+  const denom = left-2*centre+right;
   let delta = 0;
-  if(denom !== 0) delta = 0.5 * (left - right) / denom;
+  if(denom !== 0) delta = 0.5*(left-right)/denom;
   const refined = bestOffset + delta;
-
-  /* ---- convert lag → frequency (Hz) ---- */
   const pitch = sampleRate / refined;
   return {freq:pitch, correlation:bestCorr, rms};
 }
@@ -230,17 +191,14 @@ function corrAt(buf, offset){
   return corr / MAX;
 }
 
-/*=================================================================
-   8️⃣ HELPERS – colour, lightness, opacity, coordinate conversion
-=================================================================*/
+/*============== HELPERS (colour, conversion, etc.) ===============*/
 function hueFromCents(c){
   const max = DSP_CONFIG.DISPLAY_CENTS;
   const lim = Math.max(-max, Math.min(max, c));
-  // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
   return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
 }
 function lightnessFromCorr(c){ return 10 + 80 * c; }   // 10 % → 90 %
-function alphaFromCorr(c){ return c; }               // opacity = correlation
+function alphaFromCorr(c){ return c; }
 function centsToCol(cents){
   const step = (2*DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS-1);
   let col = Math.round((cents + DSP_CONFIG.DISPLAY_CENTS) / step);
@@ -257,52 +215,45 @@ function centsToX(cents, canvas){
   return x;
 }
 
-/*=================================================================
-   9️⃣ MEDIAN utility – robust pitch from recent history
-=================================================================*/
+/*============== MEDIAN utility ===============*/
 function median(arr){
   const sorted = arr.slice().sort((a,b)=>a-b);
   const mid = Math.floor(sorted.length/2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
 }
 
-/*=================================================================
-   🔟 NOTE‑NAME FROM FREQUENCY (e.g. “A♯4”)
-=================================================================*/
+/*============== NOTE‑NAME FROM FREQUENCY ===============*/
 function noteNameFromFreq(freq){
   const noteNames = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
   const midi = Math.round(69 + 12 * Math.log2(freq/440));
-  const noteIndex = (midi % 12 + 12) % 12;            // keep it positive
-  const octave    = Math.floor(midi / 12) - 1;        // MIDI 0 → C‑1
+  const noteIndex = (midi % 12 + 12) % 12;
+  const octave    = Math.floor(midi / 12) - 1;
   return noteNames[noteIndex] + octave;
 }
 
-/*=================================================================
-   🔟🔟 MAIN LOOP – runs every animation frame.
-=================================================================*/
+/*============== MAIN LOOP ===============*/
 let lastActiveIdx = -1;          // which string is currently “active”
 function mainLoop(timestamp){
-  // --------------------------------------------------------------
-  // 1️⃣ Run the heavy pitch analysis only every UPDATE_INTERVAL ms.
-  // --------------------------------------------------------------
+  // -------------------------------------------------
+  // 1️⃣ Run heavy analysis only every UPDATE_INTERVAL ms.
+  // -------------------------------------------------
   if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
     const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);   // time‑domain signal
+    analyser.getFloatTimeDomainData(buf);
 
-    /* ---- 1️⃣ RMS (kept only because autoCorrelate needs it) ---- */
-    // (no longer used for any visual element)
+    // ---- RMS (kept only because autoCorrelate needs it) ----
     let sum = 0;
     for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
     const rms = Math.sqrt(sum / buf.length);
 
-    /* ---- 2️⃣ Pitch detection via autocorrelation ---- */
+    // ---- pitch detection ----
     const rawInfo = autoCorrelate(buf, audioCtx.sampleRate); // {freq, correlation, rms} or null
 
-    /* ---- 3️⃣ Store raw detections for the median filter ---- */
+    // ---- keep short‑term history for median filter ----
     pitchHistory.push(rawInfo);
     if (pitchHistory.length > DSP_CONFIG.PITCH_HISTORY_LENGTH) pitchHistory.shift();
 
-    /* ---- 4️⃣ Median filter – gives a more stable pitch value ---- */
+    // ---- median filter ----
     const valid = pitchHistory.filter(v=>v!==null);
     let robustInfo = null;
     if (valid.length){
@@ -315,28 +266,22 @@ function mainLoop(timestamp){
       }
     }
 
-    /* --------------------------------------------------------------
-       5️⃣ Exponential smoothing of the correlation (colour intensity).
-       If no pitch is detected we let the old value decay with SMOOTH_ALPHA_OLD.
-       -------------------------------------------------------------- */
+    // ---- smooth correlation (colour intensity) ----
     if (robustInfo){
       if (smoothedCorrelation===null) smoothedCorrelation = robustInfo.correlation;
       else{
-        const newAlpha = DSP_CONFIG.CORRELATION_SMOOTH_ALPHA;
-        const oldAlpha = 1 - newAlpha;
-        smoothedCorrelation = oldAlpha*smoothedCorrelation + newAlpha*robustInfo.correlation;
+        const newA = DSP_CONFIG.CORRELATION_SMOOTH_ALPHA;
+        const oldA = 1 - newA;
+        smoothedCorrelation = oldA*smoothedCorrelation + newA*robustInfo.correlation;
       }
     }else{
       if (smoothedCorrelation!==null) smoothedCorrelation *= DSP_CONFIG.SMOOTH_ALPHA_OLD;
     }
 
-    /* --------------------------------------------------------------
-       6️⃣ Determine which string is the “active” one.
-       -------------------------------------------------------------- */
+    // ---- decide which string is “active” ----
     let activeIdx = -1;
-    let minAbs    = Infinity;
+    let minAbs = Infinity;
     const centsArray = new Array(STRINGS.length).fill(null);
-
     if (robustInfo){
       const {freq} = robustInfo;
       STRINGS.forEach((s,i)=>{
@@ -348,45 +293,34 @@ function mainLoop(timestamp){
           activeIdx = i;
         }
       });
-      // Discard detections that lie outside the displayed window.
       if (minAbs > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
     }
     lastActiveIdx = activeIdx;
 
-    /* --------------------------------------------------------------
-       7️⃣ Update the note labels:
-          * Active string → show detected note name in bright‑green.
-          * All others   → keep original tuning name in white.
-       -------------------------------------------------------------- */
+    // ---- update the overlay labels (right side) ----
     const brightGreen = '#00ff00';
     STRINGS.forEach((s, idx)=>{
       if (idx===activeIdx && robustInfo){
-        // we have a pitch → compute its musical name
         const noteName = noteNameFromFreq(robustInfo.freq);
         noteLabels[idx].textContent = noteName;
         noteLabels[idx].style.color = brightGreen;
       }else{
-        // no detection for this line → revert to original string name
         noteLabels[idx].textContent = s.name;
         noteLabels[idx].style.color = '#fff';
       }
     });
 
-    /* --------------------------------------------------------------
-       8️⃣ Push a new row into the waterfall history for every string.
-       -------------------------------------------------------------- */
+    // ---- push a new waterfall row for each string ----
     STRINGS.forEach((s, idx) => {
       let entry = null;
       if (robustInfo){
         const cents = centsArray[idx];
         const col   = centsToCol(cents);
         const hue   = hueFromCents(cents);
-        const baseLight = lightnessFromCorr(smoothedCorrelation);
-        const baseAlpha = alphaFromCorr(smoothedCorrelation);
-        const light = (activeIdx===idx) ? baseLight
-                                        : baseLight * DSP_CONFIG.OTHER_DIM_FACTOR;
-        const alpha = (activeIdx===idx) ? baseAlpha
-                                        : baseAlpha * DSP_CONFIG.OTHER_DIM_FACTOR;
+        const baseL = lightnessFromCorr(smoothedCorrelation);
+        const baseA = alphaFromCorr(smoothedCorrelation);
+        const light = (activeIdx===idx) ? baseL : baseL * DSP_CONFIG.OTHER_DIM_FACTOR;
+        const alpha  = (activeIdx===idx) ? baseA : baseA * DSP_CONFIG.OTHER_DIM_FACTOR;
         entry = {col, hue, light, alpha};
       }
       histories[idx].push(entry);
@@ -396,17 +330,14 @@ function mainLoop(timestamp){
     lastUpdate = timestamp;
   }
 
-  // --------------------------------------------------------------
-  // 9️⃣ Draw the waterfall visualisation (unchanged apart from config values)
-  // --------------------------------------------------------------
+  // -------------------------------------------------
+  // 2️⃣ Draw the waterfall visualisation (centre note removed)
+  // -------------------------------------------------
   drawAllCanvases();
-
   rafId = requestAnimationFrame(mainLoop);
 }
 
-/*=================================================================
-   1️⃣3️⃣ DRAWING ROUTINE – waterfall + note label
-=================================================================*/
+/*============== DRAWING ROUTINE ===============*/
 function drawAllCanvases(){
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
@@ -414,53 +345,37 @@ function drawAllCanvases(){
     const colW   = canvas.width / DSP_CONFIG.COLS;
     const rowH   = canvas.height / DSP_CONFIG.ROWS;
 
-    /* ---- background ---- */
+    // background
     ctx.fillStyle = '#222';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    /* ---- guide lines (centre & ±10 cents) ---- */
+    // guide lines (centre green & ±10 cents orange)
     const centreX = canvas.width/2;
     const leftX   = centsToX(-10, canvas);
     const rightX  = centsToX(10,  canvas);
-
     ctx.strokeStyle = '#30d158'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(centreX,0); ctx.lineTo(centreX,canvas.height);
     ctx.stroke();
-
     ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(leftX,0); ctx.lineTo(leftX,canvas.height);
     ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
     ctx.stroke();
 
-    /* ---- stored history rows (oldest at the top) ---- */
+    // waterfall history (oldest at the top)
     histories[idx].forEach((entry, rowIdx) => {
       if (!entry) return;
       ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
       ctx.globalAlpha = entry.alpha;
       ctx.fillRect(entry.col * colW, rowIdx * rowH, colW, rowH);
     });
-    ctx.globalAlpha = 1;   // reset for next drawing step
+    ctx.globalAlpha = 1;   // reset alpha
 
-    /* ---- big note name for the active string (bright‑green already set
-          on the .noteLabel, but we also draw it larger in the centre) ---- */
-    if (lastActiveIdx===idx && histories[idx].length){
-      const latest = histories[idx][histories[idx].length-1];
-      if (latest){
-        ctx.fillStyle = `hsl(${latest.hue},100%,${latest.light}%)`;
-        ctx.globalAlpha = latest.alpha;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 3.6rem Arial,Helvetica,sans-serif';
-        ctx.fillText(s.name, canvas.width/2, canvas.height/2);
-        ctx.globalAlpha = 1;
-      }
-    }
+    /* ---- NOTE: The large note that used to appear on the centre
+          green line has been removed per your request. ---- */
   });
 }
 
-/*=================================================================
-   1️⃣4️⃣ AUTO‑START on page load
-=================================================================*/
+/*============== AUTO‑START ===============*/
 window.addEventListener('load', startTuner);
 </script>
 </body>
