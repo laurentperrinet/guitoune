@@ -4,23 +4,29 @@
 <meta charset="UTF-8">
 <title>Guitoune: the mobile‑Friendly 6‑String Guitar Tuner</title>
 <style>
-  body{
-    margin:0; font-family:Arial,Helvetica,sans-serif;
+  html,body{
+    margin:0; height:100%; overflow:hidden;
     background:#111; color:#eee;
-    display:flex; flex-direction:column; align-items:center;
-    padding:0.8rem;
+    font-family:Arial,Helvetica,sans-serif;
   }
-  .stringBlock{
-    margin:0.5rem 0;
-    text-align:center;
+  /* One row per string – each row occupies 1/6 of the viewport height */
+  .stringRow{
+    display:flex;
+    align-items:center;
+    width:100%;
+    height:calc(100vh/6);
   }
-  .title{font-size:1rem; margin-bottom:0.15rem;}
   canvas{
-    background:#222; border:2px solid #555; border-radius:4px;
-    width:560px; height:150px;          /* big enough for phones */
+    flex:1 1 auto;               /* fill the remaining width */
+    display:block;                /* remove inline‑canvas whitespace */
+    background:#222;            /* fallback colour while we draw */
   }
-  #legend{
-    margin-top:0.6rem; font-size:0.85rem; color:#bbb;
+  .noteLabel{
+    flex:0 0 3.5rem;            /* fixed width for the note text */
+    font-size:2.2rem;
+    font-weight:bold;
+    text-align:center;
+    color:#fff;
   }
 </style>
 </head>
@@ -28,165 +34,85 @@
 
 <div id="tunerContainer"></div>
 
-<div id="legend">
-  <span style="color:#30d158;">●</span> ≤ 1 cent &nbsp;
-  <span style="color:#ffcc00;">●</span> ≤ 10 cents &nbsp;
-  <span style="color:#ff3b30;">●</span> > 10 cents
-</div>
-
 <script>
 /* ---------------------------------------------------------
-   1️⃣ SETTINGS
+   SETTINGS
    --------------------------------------------------------- */
 const STRINGS = [
-  {name:'E2 (low)',  freq: 82.41},
-  {name:'A2',        freq:110.00},
-  {name:'D3',        freq:146.83},
-  {name:'G3',        freq:196.00},
-  {name:'B3',        freq:246.94},
-  {name:'E4 (high)', freq:329.63}
+  {name:'E2', freq: 82.41},
+  {name:'A2', freq:110.00},
+  {name:'D3', freq:146.83},
+  {name:'G3', freq:196.00},
+  {name:'B3', freq:246.94},
+  {name:'E4', freq:329.63}
 ];
 
-const GREEN_CENTS   = 1;      // ≤ 1 cent → green
-const YELLOW_CENTS  = 10;     // ≤ 10 cents → yellow
-const DISPLAY_CENTS = 50;     // ±50 cents shown on canvas
-const BAR_WIDTH     = 3;      // width of the drawn column (px)
-const SAMPLE_BUFFER = 4096;   // FFT size – larger = smoother pitch
+const DISPLAY_CENTS = 50;          // ±50 cents visible left↔right
+const COLS = 21;                   // columns (log‑frequency)
+const ROWS = 10;                   // rows (time)
+
+// helpers for colour conversion
+function hueFromCents(c){
+  const max = DISPLAY_CENTS;
+  const cLim = Math.max(-max, Math.min(max, c));
+  // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
+  return cLim < 0
+    ? 120 * (1 + cLim / max)          // 120 → 0
+    : 120 + 120 * (cLim / max);      // 120 → 240
+}
+function lightnessFromCorr(c){
+  // correlation (0‑1) → lightness 30 %‑85 %
+  return 30 + 55 * c;
+}
+function centsToCol(cents){
+  const step = (2 * DISPLAY_CENTS) / (COLS - 1);   // size of one column in cents
+  let col = Math.round((cents + DISPLAY_CENTS) / step);
+  if (col < 0) col = 0;
+  if (col >= COLS) col = COLS - 1;
+  return col;
+}
 
 /* ---------------------------------------------------------
-   2️⃣ BUILD UI – one block + canvas per string
+   BUILD UI – one canvas + note label per string
    --------------------------------------------------------- */
 const container = document.getElementById('tunerContainer');
-STRINGS.forEach((s,i) => {
-  const block = document.createElement('div');
-  block.className = 'stringBlock';
-  block.innerHTML = `
-    <div class="title">${s.name} – <span id="freq${i}">– Hz</span></div>
-    <canvas id="canvas${i}" width="560" height="150"></canvas>
+const canvases = [];                     // keep a reference to each canvas
+STRINGS.forEach(s => {
+  const row = document.createElement('div');
+  row.className = 'stringRow';
+  row.innerHTML = `
+    <canvas></canvas>
+    <div class="noteLabel">${s.name}</div>
   `;
-  container.appendChild(block);
+  container.appendChild(row);
+  const canvas = row.querySelector('canvas');
+  canvases.push(canvas);
 });
 
 /* ---------------------------------------------------------
-   3️⃣ HELPERS – colour, cents → X‑pixel, background drawing
-   --------------------------------------------------------- */
-function colourFromCents(c) {
-  const a = Math.abs(c);
-  if (a <= GREEN_CENTS)   return '#30d158';
-  if (a <= YELLOW_CENTS)  return '#ffcc00';
-  return '#ff3b30';
-}
-function centsToX(cents, canvas) {
-  const half = canvas.width / 2;
-  const pxPerCent = half / DISPLAY_CENTS;
-  let x = Math.round(half + cents * pxPerCent);
-  if (x < 0) x = 0;
-  if (x >= canvas.width) x = canvas.width - 1;
-  return x;
-}
-function drawCanvasBackground(idx) {
-  const canvas = document.getElementById(`canvas${idx}`);
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.fillStyle = '#222';
-  ctx.fillRect(0,0,w,h);
-
-  // centre line (target pitch)
-  ctx.strokeStyle = '#555';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(w/2,0);
-  ctx.lineTo(w/2,h);
-  ctx.stroke();
-
-  // tick marks every 10 cents
-  const step = 10;
-  const pxPerCent = (w/2) / DISPLAY_CENTS;
-  ctx.fillStyle = '#777';
-  ctx.font = '9px Arial';
-  ctx.textBaseline = 'top';
-  for (let c = -DISPLAY_CENTS; c <= DISPLAY_CENTS; c += step) {
-    const x = w/2 + c*pxPerCent;
-    ctx.fillRect(x-0.5,0,1,h);
-    if (c !== 0) ctx.fillText((c>0?`+${c}`:`${c}`), x-12, 2);
-  }
-}
-
-/* ---------------------------------------------------------
-   4️⃣ SCROLL ONE ROW UP
-   --------------------------------------------------------- */
-function scrollCanvasUp(canvas) {
-  const ctx = canvas.getContext('2d');
-  const img = ctx.getImageData(0,1,canvas.width,canvas.height-1);
-  ctx.putImageData(img,0,0);
-  ctx.clearRect(0,canvas.height-1,canvas.width,1);
-}
-
-/* ---------------------------------------------------------
-   5️⃣ AUTOCORRELATION WITH SUB‑SAMPLE INTERPOLATION
-   --------------------------------------------------------- */
-function autoCorrelate(buf, sampleRate) {
-  const SIZE = buf.length;
-  const MAX_SAMPLES = Math.floor(SIZE/2);
-  let rms = 0;
-  for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1;                 // silence / too quiet
-
-  let bestOffset = -1, bestCorr = 0, lastCorr = 1;
-  for (let offset=0; offset<MAX_SAMPLES; offset++) {
-    let corr = 0;
-    if (offset + MAX_SAMPLES > buf.length) break; // safety
-    for (let i=0; i<MAX_SAMPLES; i++) corr += Math.abs(buf[i]-buf[i+offset]);
-    corr = 1 - (corr / MAX_SAMPLES);
-    if (corr > 0.9 && corr > lastCorr) {
-      if (corr > bestCorr) { bestCorr = corr; bestOffset = offset; }
-    }
-    lastCorr = corr;
-  }
-  if (bestOffset === -1) return -1;
-
-  // ---- parabolic interpolation around the peak ----
-  const left  = bestOffset > 0 ? 1 - Math.abs(correlationAt(buf,bestOffset-1)) : 0;
-  const center= 1 - Math.abs(correlationAt(buf,bestOffset));
-  const right = (bestOffset+1 < MAX_SAMPLES) ? 1 - Math.abs(correlationAt(buf,bestOffset+1)) : 0;
-  const denom = (left - 2*center + right);
-  let delta = 0;
-  if (denom !== 0) delta = 0.5 * (left - right) / denom;
-  const refinedOffset = bestOffset + delta;
-
-  return sampleRate / refinedOffset;
-}
-function correlationAt(buf, offset) {
-  const MAX_SAMPLES = Math.floor(buf.length/2);
-  let corr = 0;
-  for (let i=0; i<MAX_SAMPLES; i++) corr += Math.abs(buf[i] - buf[i+offset]);
-  return corr / MAX_SAMPLES;
-}
-
-/* ---------------------------------------------------------
-   6️⃣ AUDIO SETUP (band‑pass filter chain)
+   AUDIO + PITCH DETECTION
    --------------------------------------------------------- */
 let audioCtx, analyser, source, highPass, lowPass, rafId;
+const rowIndices = new Array(STRINGS.length).fill(0);   // current time‑row per string
 
-async function startTuner() {
-  try {
+async function startTuner(){
+  try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    // ----- band‑pass filter -----
+    /* ----- band‑pass filter (70 Hz – 450 Hz) ----- */
     highPass = audioCtx.createBiquadFilter();
     highPass.type = 'highpass';
-    highPass.frequency.value = 70;   // cut rumble below 70 Hz
+    highPass.frequency.value = 70;
     highPass.Q.value = 0.707;
 
     lowPass = audioCtx.createBiquadFilter();
     lowPass.type = 'lowpass';
-    lowPass.frequency.value = 450;  // cut above the normal guitar range
+    lowPass.frequency.value = 450;
     lowPass.Q.value = 0.707;
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = SAMPLE_BUFFER;   // 4096 → ~92 ms window
+    analyser.fftSize = 4096;               // larger window → more stable pitch
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(highPass);
@@ -195,57 +121,104 @@ async function startTuner() {
 
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-    STRINGS.forEach((_,i) => drawCanvasBackground(i));
-
+    resizeCanvases();                      // set the drawing buffer size
     rafId = requestAnimationFrame(update);
-  } catch (e) {
-    alert('Microphone access denied or unavailable.\n' + e);
+  }catch(e){
+    alert('Microphone access error:\n' + e);
   }
 }
 
 /* ---------------------------------------------------------
-   7️⃣ MAIN UPDATE LOOP – draw the scrolling trace
+   Resize canvases to match their on‑screen size (pixel‑perfect)
    --------------------------------------------------------- */
-function update() {
+function resizeCanvases(){
+  const rows = document.querySelectorAll('.stringRow');
+  rows.forEach(row => {
+    const canvas = row.querySelector('canvas');
+    canvas.width  = row.clientWidth;    // drawing buffer size
+    canvas.height = row.clientHeight;
+    // clear with dark background
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#222';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  });
+}
+window.addEventListener('resize', resizeCanvases);
+
+/* ---------------------------------------------------------
+   Autocorrelation pitch detector (returns {freq, correlation})
+   --------------------------------------------------------- */
+function detectPitch(buf, sampleRate){
+  const SIZE = buf.length;
+  const MAX = Math.floor(SIZE/2);
+  // RMS – discard silence
+  let rms = 0;
+  for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
+  rms = Math.sqrt(rms/SIZE);
+  if (rms < 0.01) return null;    // too quiet
+
+  let bestOffset = -1, bestCorr = 0, lastCorr = 1;
+  for (let offset=0; offset<MAX; offset++) {
+    let corr = 0;
+    if (offset + MAX > buf.length) break;
+    for (let i=0; i<MAX; i++) corr += Math.abs(buf[i] - buf[i+offset]);
+    corr = 1 - (corr / MAX);      // normalised correlation 0‑1
+    if (corr > 0.9 && corr > lastCorr) {
+      if (corr > bestCorr) { bestCorr = corr; bestOffset = offset; }
+    }
+    lastCorr = corr;
+  }
+  if (bestOffset === -1) return null;
+  const freq = sampleRate / bestOffset;
+  return {freq, correlation:bestCorr};
+}
+
+/* ---------------------------------------------------------
+   MAIN UPDATE LOOP – draw fading coloured dots
+   --------------------------------------------------------- */
+function update(){
   const buf = new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(buf);
-  const pitch = autoCorrelate(buf, audioCtx.sampleRate); // Hz or -1
+  const pitchInfo = detectPitch(buf, audioCtx.sampleRate);
 
-  if (pitch !== -1) {
-    STRINGS.forEach((s, idx) => {
-      const cents = 1200 * Math.log2(pitch / s.freq);
-      const canvas = document.getElementById(`canvas${idx}`);
-      const freqEl = document.getElementById(`freq${idx}`);
+  // We will always advance the time‑row (so the visual grid scrolls)
+  STRINGS.forEach((s, idx) => {
+    const canvas = canvases[idx];
+    const ctx = canvas.getContext('2d');
 
-      freqEl.textContent = pitch.toFixed(2) + ' Hz';
+    const colW = canvas.width  / COLS;
+    const rowH = canvas.height / ROWS;
 
-      scrollCanvasUp(canvas);
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = colourFromCents(cents);
-      const x = centsToX(cents, canvas);
-      ctx.fillRect(x, canvas.height-1, BAR_WIDTH, 1);
-    });
-  } else {
-    // No reliable pitch → just scroll blank rows
-    STRINGS.forEach((_, idx) => {
-      const canvas = document.getElementById(`canvas${idx}`);
-      scrollCanvasUp(canvas);
-    });
-  }
+    // 1️⃣ Fade the whole canvas a little (older dots become darker)
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';   // alpha controls fade speed
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // 2️⃣ If we have a pitch, draw a new dot in the current row
+    if (pitchInfo){
+      const {freq, correlation} = pitchInfo;
+      const cents = 1200 * Math.log2(freq / s.freq);
+      const col   = centsToCol(cents);
+      const hue   = hueFromCents(cents);
+      const light = lightnessFromCorr(correlation);
+      ctx.fillStyle = `hsl(${hue},100%,${light}%)`;
+      const row = rowIndices[idx];
+      // draw the block at the *bottom‑most* row for row=0, then move up
+      const y = canvas.height - (row + 1) * rowH;
+      ctx.fillRect(col * colW, y, colW, rowH);
+    }
+
+    // 3️⃣ Advance the row for the next frame (wrap after ROWS)
+    rowIndices[idx] = (rowIndices[idx] + 1) % ROWS;
+  });
 
   rafId = requestAnimationFrame(update);
 }
 
 /* ---------------------------------------------------------
-   8️⃣ AUTO‑START on page load
+   AUTO‑START on page load
    --------------------------------------------------------- */
 window.addEventListener('load', () => {
-  startTuner();   // try to open the mic immediately
-});
-
-/* Optional: stop the animation when the tab is hidden */
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && rafId) cancelAnimationFrame(rafId);
+  startTuner();          // asks for microphone permission immediately
 });
 </script>
 </body>
