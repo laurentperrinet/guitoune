@@ -1,4 +1,4 @@
-# guitoune : A web-based guitar tuner
+# Guitoune: the mobile‑Friendly 6‑String Guitar Tuner
 
 Why need an app when you can do it online ?
 
