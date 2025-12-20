@@ -63,7 +63,7 @@ const DSP_CONFIG = {
   DISPLAY_CENTS   : 60,            // smaller window – easier to see fine tuning
 
   /* Number of frequency columns in the waterfall (log‑frequency axis). */
-  COLS            : 31,
+  COLS            : 19,
 
   /* Number of time‑rows kept in the history (vertical axis). */
   ROWS            : 20,
@@ -72,7 +72,7 @@ const DSP_CONFIG = {
   UPDATE_INTERVAL : 100,          // 10 updates per second → smoother UI
 
   /* High‑pass filter cutoff (Hz) – removes rumble. */
-  HP_CUT          : 30,
+  HP_CUT          : 50,
 
   /* Low‑pass filter cutoff (Hz) – now high enough for B3/E4 fundamentals. */
   LP_CUT          : 1800,
@@ -84,19 +84,19 @@ const DSP_CONFIG = {
   FFT_SIZE        : 16384,
 
   /* Minimum correlation value required to accept a pitch detection. */
-  CORRELATION_MIN : 0.1,          // more tolerant – lets weak notes appear
+  CORRELATION_MIN : 0.7,          // more tolerant – lets weak notes appear
 
   /* Weight of the newest correlation when smoothing (0 → 1). */
   CORRELATION_SMOOTH_ALPHA : 0.4,
 
   /* Dim factor for non‑active strings (0 → 1). */
-  OTHER_DIM_FACTOR : 0.5,
+  OTHER_DIM_FACTOR : 0.8,
 
   /* How many raw pitch detections we keep for the median filter. */
-  PITCH_HISTORY_LENGTH : 5,
+  PITCH_HISTORY_LENGTH : 20,
 
   /* Weight of the *old* correlation when no pitch is detected. */
-  SMOOTH_ALPHA_OLD : 0.6
+  SMOOTH_ALPHA_OLD : 0.8
 };
 
 /*=====================================================================

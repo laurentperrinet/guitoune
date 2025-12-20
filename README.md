@@ -20,6 +20,7 @@ Why need an app when you can do it online?
 1. Open https://laurentperrinet.github.io/guitoune/ in a browser (desktop or mobile).  
 2. Tap the screen (if the browser requires a user gesture) – the microphone permission prompt appears.  
 3. Play each string; the tuner will automatically display the current frequency, the note’s cent offset, and a realtime scrolling graph.
+4. Therefore, one semitone flat on the left and one semitone sharp on the right. The vertical bars show +/- 10 % to the correct pitch (green bar)
 
 ---
 
