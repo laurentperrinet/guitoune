@@ -2,77 +2,138 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Web Guitar Tuner – A (440 Hz)</title>
+<title>Web Guitar Tuner – A (440 Hz) with Live Frequency Trace</title>
 <style>
   body {
     margin:0; font-family:Arial,Helvetica,sans-serif;
-    background:#222; color:#fff; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; height:100vh;
+    background:#111; color:#eee;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:flex-start; min-height:100vh;
   }
   button {
-    padding:1rem 2rem; font-size:1.2rem; cursor:pointer;
-    border:none; border-radius:8px; background:#0a84ff; color:#fff;
+    margin:1rem; padding:0.7rem 1.5rem; font-size:1.1rem;
+    cursor:pointer; border:none; border-radius:6px;
+    background:#0a84ff; color:#fff;
   }
-  #freq { font-size:3rem; margin:1rem 0; }
+  #freq { font-size:2.8rem; margin:0.4rem 0; }
   #statusBar {
-    width:80%; max-width:400px; height:20px;
-    border-radius:4px; background:#555;
-    overflow:hidden;
+    width:90%; max-width:480px; height:20px;
+    border-radius:4px; background:#444; overflow:hidden;
+    margin-bottom:0.5rem;
   }
-  #indicator {
-    height:100%; width:0%; transition:width .1s ease-out;
+  #indicator { height:100%; width:0%; transition:width .08s linear; }
+  /*---- canvas for the scrolling trace ----*/
+  #traceCanvas {
+    background:#222;
+    border:2px solid #555;
+    border-radius:6px;
+    margin-top:0.8rem;
+  }
+  #legend {
+    font-size:0.85rem; color:#bbb; margin-top:0.3rem;
   }
 </style>
 </head>
 <body>
 
 <button id="startBtn">🎤 Click to start</button>
-<div id="freq">– Hz</div>
+<div id="freq">– Hz</div>
+
 <div id="statusBar"><div id="indicator"></div></div>
 
-<script>
-/* ==== SETTINGS ==== */
-const TARGET_FREQ = 440;               // A4
-const TOLERANCE_CENTS = 1;             // green zone (≈0.06 Hz at 440 Hz)
-const CLOSE_CENTS   = 10;              // yellow zone
+<canvas id="traceCanvas" width="600" height="200"></canvas>
+<div id="legend">
+  <span style="color:#30d158;">●</span> within ±1 cent &nbsp;&nbsp;
+  <span style="color:#ffcc00;">●</span> ±1‑10 cents &nbsp;&nbsp;
+  <span style="color:#ff3b30;">●</span> > 10 cents
+</div>
 
-/* ==== UI helpers ==== */
+<script>
+/* ====================== SETTINGS ====================== */
+const TARGET_FREQ   = 440;   // A4
+const TOLERANCE_CENTS = 1;   // green zone
+const CLOSE_CENTS     = 10;  // yellow zone
+
+// Horizontal span displayed around the target note.
+// Here we show ±½ semitone ≈ ±25 cents ≈ ±14 Hz at 440 Hz.
+const DISPLAY_RANGE_HZ = 30;   // total width = 2*DISPLAY_RANGE_HZ
+
+/* ====================== UI HELPERS ====================== */
 const startBtn = document.getElementById('startBtn');
 const freqEl   = document.getElementById('freq');
-const indicator = document.getElementById('indicator');
+const indicator= document.getElementById('indicator');
+const canvas   = document.getElementById('traceCanvas');
+const ctx      = canvas.getContext('2d');
 
+const canvasW = canvas.width;
+const canvasH = canvas.height;
+
+// centre (pixel) where the target frequency sits
+const centreX = canvasW/2;
+
+/* Draw the static background (grid + centre line) once */
+function drawBackground() {
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0,0,canvasW,canvasH);
+
+  // vertical centre line (target frequency)
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(centreX,0);
+  ctx.lineTo(centreX,canvasH);
+  ctx.stroke();
+
+  // optional: small tick marks every 5 Hz
+  const stepHz = 5;
+  const pixelsPerHz = (canvasW/2) / DISPLAY_RANGE_HZ;
+  ctx.fillStyle = '#777';
+  ctx.font = '10px Arial';
+  ctx.textBaseline = 'top';
+  for (let offset = -DISPLAY_RANGE_HZ; offset <= DISPLAY_RANGE_HZ; offset += stepHz) {
+    const x = centreX + offset * pixelsPerHz;
+    ctx.fillRect(x-0.5,0,1,canvasH);
+    if (offset !== 0) { // label
+      ctx.fillText(`${TARGET_FREQ + offset} Hz`, x-15, 2);
+    }
+  }
+}
+drawBackground();
+
+/* ====================== COLOUR LOGIC ====================== */
+function getColourFromCents(cents) {
+  const abs = Math.abs(cents);
+  if (abs <= TOLERANCE_CENTS) return '#30d158'; // green
+  if (abs <= CLOSE_CENTS)   return '#ffcc00'; // yellow
+  return '#ff3b30';                     // red
+}
 function setIndicator(cents) {
   const abs = Math.abs(cents);
-  let color = '#ff3b30';              // red
-  if (abs <= TOLERANCE_CENTS) color = '#30d158'; // green
-  else if (abs <= CLOSE_CENTS)   color = '#ffcc00'; // yellow
-  indicator.style.background = color;
-  // width proportional to how far off we are (capped at 100%)
-  const maxCents = 50;                // arbitrary cap for visual scaling
-  const width = Math.min(100, (abs / maxCents) * 100);
-  indicator.style.width = width + '%';
+  const colour = getColourFromCents(cents);
+  const maxCents = 50;            // visual scaling cap
+  const widthPct = Math.min(100, (abs / maxCents) * 100);
+  indicator.style.background = colour;
+  indicator.style.width = widthPct + '%';
 }
 
-/* ==== Pitch detection (autocorrelation) ==== */
+/* ====================== PITCH DETECTION ====================== */
+/* Autocorrelation – fast, works well for a single monophonic note */
 function autoCorrelate(buf, sampleRate) {
-  // Implementation notes:
-  //  * buf is a Float32Array of time‑domain audio samples.
-  //  * Returns frequency in Hz or -1 if no pitch is detected.
   const SIZE = buf.length;
   const MAX_SAMPLES = Math.floor(SIZE/2);
   let bestOffset = -1;
   let bestCorrelation = 0;
   let rms = 0;
 
-  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1; // too quiet
+  for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
+  rms = Math.sqrt(rms/SIZE);
+  if (rms < 0.01) return -1;               // silence / very quiet
 
   let lastCorrelation = 1;
-  for (let offset = 0; offset < MAX_SAMPLES; offset++) {
+  for (let offset=0; offset<MAX_SAMPLES; offset++) {
     let correlation = 0;
-    for (let i = 0; i < MAX_SAMPLES; i++) {
-      correlation += Math.abs(buf[i] - buf[i + offset]);
+    for (let i=0; i<MAX_SAMPLES; i++) {
+      correlation += Math.abs(buf[i] - buf[i+offset]);
     }
     correlation = 1 - (correlation / MAX_SAMPLES);
     if (correlation > 0.9 && correlation > lastCorrelation) {
@@ -83,65 +144,78 @@ function autoCorrelate(buf, sampleRate) {
     }
     lastCorrelation = correlation;
   }
-
   if (bestOffset === -1) return -1;
-
-  const pitch = sampleRate / bestOffset;
-  return pitch;
+  return sampleRate / bestOffset;
 }
 
-/* ==== Main audio pipeline ==== */
-let audioContext, analyser, mediaStreamSource, rafId;
+/* ====================== AUDIO PIPELINE ====================== */
+let audioCtx, analyser, source, rafId;
 
 async function startTuner() {
   startBtn.disabled = true;
   startBtn.textContent = '⏳ Starting…';
-
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    mediaStreamSource = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
-    mediaStreamSource.connect(analyser);
-
-    // kick off the animation loop
-    updatePitch();
+    source.connect(analyser);
+    rafId = requestAnimationFrame(updatePitch);
     startBtn.style.display = 'none';
   } catch (e) {
-    alert('Could not access microphone: ' + e.message);
+    alert('Microphone access denied or unavailable.\n' + e);
     startBtn.disabled = false;
     startBtn.textContent = '🎤 Click to start';
   }
 }
 
-/* ==== Loop that reads the analyser and updates UI ==== */
-function updatePitch() {
-  const bufferLength = analyser.fftSize;
-  const data = new Float32Array(bufferLength);
-  analyser.getFloatTimeDomainData(data);
+/* ====================== DRAWING THE TRACE ====================== */
+function shiftCanvasUp() {
+  // copy the image up by 1 pixel (oldest row disappears at the top)
+  const imgData = ctx.getImageData(0,1,canvasW,canvasH-1);
+  ctx.putImageData(imgData,0,0);
+  // clear the new bottom row where we will draw the latest measurement
+  ctx.clearRect(0,canvasH-1,canvasW,1);
+}
 
-  const freq = autoCorrelate(data, audioContext.sampleRate);
+/* Main loop: read audio → detect pitch → update UI + trace */
+function updatePitch() {
+  const bufferLen = analyser.fftSize;
+  const data = new Float32Array(bufferLen);
+  analyser.getFloatTimeDomainData(data);
+  const freq = autoCorrelate(data, audioCtx.sampleRate);
+
   if (freq !== -1) {
     const cents = 1200 * Math.log2(freq / TARGET_FREQ);
     freqEl.textContent = freq.toFixed(2) + ' Hz';
     setIndicator(cents);
-  } else {
-    freqEl.textContent = '— Hz';
-    indicator.style.width = '0%';
-  }
 
+    // ------- draw new column on the trace -------
+    shiftCanvasUp();   // scroll up 1 pixel
+
+    const colour = getColourFromCents(cents);
+    const pixelsPerHz = (canvasW/2) / DISPLAY_RANGE_HZ; // half‑canvas per side
+    const xOffset = (freq - TARGET_FREQ) * pixelsPerHz; // may be negative
+
+    // Clamp to canvas width (so extreme out‑of‑range pitches just hit the edge)
+    const x = Math.max(0, Math.min(canvasW-1, Math.round(centreX + xOffset)));
+
+    ctx.fillStyle = colour;
+    ctx.fillRect(x, canvasH-1, 1, 1);   // draw a single‑pixel column
+  } else {
+    freqEl.textContent = '— Hz';
+    setIndicator(0);
+    shiftCanvasUp(); // still scroll, but draw nothing (blank line)
+  }
   rafId = requestAnimationFrame(updatePitch);
 }
 
-/* ==== Event listeners ==== */
+/* ====================== EVENT LISTENERS ====================== */
 startBtn.addEventListener('click', startTuner);
-
-// Clean‑up when the page is hidden (optional, but nice)
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && rafId) cancelAnimationFrame(rafId);
 });
 </script>
-
 </body>
 </html>
