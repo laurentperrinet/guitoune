@@ -59,46 +59,43 @@
    1️⃣ GLOBAL DSP CONFIG – every field now has a short description.
    =====================================================================*/
 const DSP_CONFIG = {
-  /* How many cents left/right of perfect pitch are shown (± value). */
-  DISPLAY_CENTS   : 60,            // smaller window – easier to see fine tuning
+  /* Cents shown on each side of the centre. 100 → ±1 semitone. */
+  DISPLAY_CENTS   : 100,
 
-  /* Number of frequency columns in the waterfall (log‑frequency axis). */
-  COLS            : 19,
+  /* Number of frequency columns (horizontal resolution). */
+  COLS            : 35,
 
-  /* Number of time‑rows kept in the history (vertical axis). */
-  ROWS            : 20,
+  /* Number of time rows kept (vertical resolution). */
+  ROWS            : 30,
 
-  /* How often we run the heavy pitch‑analysis (ms). */
-  UPDATE_INTERVAL : 100,          // 10 updates per second → smoother UI
+  /* How often we run the heavy pitch analysis (ms). */
+  UPDATE_INTERVAL : 100,
 
-  /* High‑pass filter cutoff (Hz) – removes rumble. */
-  HP_CUT          : 50,
+  /* Band‑pass limits (Hz). */
+  HP_CUT          : 30,
+  LP_CUT          : 1500,          // still high enough for B3/E4
 
-  /* Low‑pass filter cutoff (Hz) – now high enough for B3/E4 fundamentals. */
-  LP_CUT          : 1800,
-
-  /* Q‑factor for the two band‑pass filters (Butterworth‑like). */
+  /* Q‑factor for the two band‑pass filters. */
   BAND_Q          : 0.707,
 
-  /* Size of the FFT used for the analyser (must be a power of 2). */
+  /* FFT size – larger = finer frequency bins, more CPU. */
   FFT_SIZE        : 16384,
 
-  /* Minimum correlation value required to accept a pitch detection. */
-  CORRELATION_MIN : 0.7,          // more tolerant – lets weak notes appear
+  /* Minimum correlation to accept a pitch. Lower = less “holes”. */
+  CORRELATION_MIN : 0.05,
 
   /* Weight of the newest correlation when smoothing (0 → 1). */
-  CORRELATION_SMOOTH_ALPHA : 0.4,
+  CORRELATION_SMOOTH_ALPHA : 0.2,   // smoother colour evolution
 
-  /* Dim factor for non‑active strings (0 → 1). */
-  OTHER_DIM_FACTOR : 0.8,
+  /* Dim factor for strings that are not the active one. */
+  OTHER_DIM_FACTOR : 0.3,
 
   /* How many raw pitch detections we keep for the median filter. */
-  PITCH_HISTORY_LENGTH : 20,
+  PITCH_HISTORY_LENGTH : 20,       // you asked for this
 
-  /* Weight of the *old* correlation when no pitch is detected. */
+  /* Weight of the old correlation when no pitch is detected. */
   SMOOTH_ALPHA_OLD : 0.8
 };
-
 /*=====================================================================
    2️⃣ GUITAR NOTES (standard tuning)
    =====================================================================*/
