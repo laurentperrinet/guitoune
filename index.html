@@ -2,138 +2,115 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Web Guitar Tuner – A (440 Hz) with Live Frequency Trace</title>
+<title>Web Guitar Tuner – 6 Strings (log‑cents trace)</title>
 <style>
-  body {
+  body{
     margin:0; font-family:Arial,Helvetica,sans-serif;
     background:#111; color:#eee;
     display:flex; flex-direction:column; align-items:center;
-    justify-content:flex-start; min-height:100vh;
+    padding:1rem;
   }
-  button {
-    margin:1rem; padding:0.7rem 1.5rem; font-size:1.1rem;
+  button{
+    margin:0.8rem; padding:0.7rem 1.4rem; font-size:1.1rem;
     cursor:pointer; border:none; border-radius:6px;
     background:#0a84ff; color:#fff;
   }
-  #freq { font-size:2.8rem; margin:0.4rem 0; }
-  #statusBar {
-    width:90%; max-width:480px; height:20px;
-    border-radius:4px; background:#444; overflow:hidden;
-    margin-bottom:0.5rem;
+  .stringBlock{
+    margin:0.6rem 0;
+    text-align:center;
   }
-  #indicator { height:100%; width:0%; transition:width .08s linear; }
-  /*---- canvas for the scrolling trace ----*/
-  #traceCanvas {
-    background:#222;
-    border:2px solid #555;
-    border-radius:6px;
-    margin-top:0.8rem;
+  .title{font-size:1.1rem; margin-bottom:0.2rem;}
+  canvas{
+    background:#222; border:2px solid #555; border-radius:4px;
   }
-  #legend {
-    font-size:0.85rem; color:#bbb; margin-top:0.3rem;
+  #legend{
+    margin-top:0.8rem; font-size:0.85rem; color:#bbb;
   }
 </style>
 </head>
 <body>
 
-<button id="startBtn">🎤 Click to start</button>
-<div id="freq">– Hz</div>
+<button id="startBtn">▶️ Click to start</button>
 
-<div id="statusBar"><div id="indicator"></div></div>
+<div id="tunerContainer"></div>
 
-<canvas id="traceCanvas" width="600" height="200"></canvas>
 <div id="legend">
-  <span style="color:#30d158;">●</span> within ±1 cent &nbsp;&nbsp;
-  <span style="color:#ffcc00;">●</span> ±1‑10 cents &nbsp;&nbsp;
+  <span style="color:#30d158;">●</span> ≤ 1 cent&nbsp;&nbsp;
+  <span style="color:#ffcc00;">●</span> ≤ 10 cents&nbsp;&nbsp;
   <span style="color:#ff3b30;">●</span> > 10 cents
 </div>
 
 <script>
-/* ====================== SETTINGS ====================== */
-const TARGET_FREQ   = 440;   // A4
-const TOLERANCE_CENTS = 1;   // green zone
-const CLOSE_CENTS     = 10;  // yellow zone
+/* ---------------------------------------------------------
+   1️⃣ SETTINGS
+   --------------------------------------------------------- */
+const STRINGS = [
+  {name:'E2 (low)',  freq: 82.41},
+  {name:'A2',        freq:110.00},
+  {name:'D3',        freq:146.83},
+  {name:'G3',        freq:196.00},
+  {name:'B3',        freq:246.94},
+  {name:'E4 (high)', freq:329.63}
+];
 
-// Horizontal span displayed around the target note.
-// Here we show ±½ semitone ≈ ±25 cents ≈ ±14 Hz at 440 Hz.
-const DISPLAY_RANGE_HZ = 30;   // total width = 2*DISPLAY_RANGE_HZ
+const GREEN_CENTS   = 1;   // ≤ 1 cent → green
+const YELLOW_CENTS  = 10;  // ≤ 10 cents → yellow
+const DISPLAY_CENTS = 50;  // ±50 cents = about half a semitone (visual window)
 
-/* ====================== UI HELPERS ====================== */
-const startBtn = document.getElementById('startBtn');
-const freqEl   = document.getElementById('freq');
-const indicator= document.getElementById('indicator');
-const canvas   = document.getElementById('traceCanvas');
-const ctx      = canvas.getContext('2d');
+/* ---------------------------------------------------------
+   2️⃣ BUILD THE UI – one block + canvas for each string
+   --------------------------------------------------------- */
+const container = document.getElementById('tunerContainer');
 
-const canvasW = canvas.width;
-const canvasH = canvas.height;
+STRINGS.forEach((s,i) => {
+  const block = document.createElement('div');
+  block.className = 'stringBlock';
+  block.innerHTML = `
+    <div class="title">${s.name} – <span id="freq${i}">– Hz</span></div>
+    <canvas id="canvas${i}" width="500" height="120"></canvas>
+  `;
+  container.appendChild(block);
+});
 
-// centre (pixel) where the target frequency sits
-const centreX = canvasW/2;
-
-/* Draw the static background (grid + centre line) once */
-function drawBackground() {
-  ctx.fillStyle = '#222';
-  ctx.fillRect(0,0,canvasW,canvasH);
-
-  // vertical centre line (target frequency)
-  ctx.strokeStyle = '#555';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(centreX,0);
-  ctx.lineTo(centreX,canvasH);
-  ctx.stroke();
-
-  // optional: small tick marks every 5 Hz
-  const stepHz = 5;
-  const pixelsPerHz = (canvasW/2) / DISPLAY_RANGE_HZ;
-  ctx.fillStyle = '#777';
-  ctx.font = '10px Arial';
-  ctx.textBaseline = 'top';
-  for (let offset = -DISPLAY_RANGE_HZ; offset <= DISPLAY_RANGE_HZ; offset += stepHz) {
-    const x = centreX + offset * pixelsPerHz;
-    ctx.fillRect(x-0.5,0,1,canvasH);
-    if (offset !== 0) { // label
-      ctx.fillText(`${TARGET_FREQ + offset} Hz`, x-15, 2);
-    }
-  }
-}
-drawBackground();
-
-/* ====================== COLOUR LOGIC ====================== */
-function getColourFromCents(cents) {
-  const abs = Math.abs(cents);
-  if (abs <= TOLERANCE_CENTS) return '#30d158'; // green
-  if (abs <= CLOSE_CENTS)   return '#ffcc00'; // yellow
-  return '#ff3b30';                     // red
-}
-function setIndicator(cents) {
-  const abs = Math.abs(cents);
-  const colour = getColourFromCents(cents);
-  const maxCents = 50;            // visual scaling cap
-  const widthPct = Math.min(100, (abs / maxCents) * 100);
-  indicator.style.background = colour;
-  indicator.style.width = widthPct + '%';
+/* ---------------------------------------------------------
+   3️⃣ HELPERS – colour & cents → X‑pixel conversion
+   --------------------------------------------------------- */
+function colourFromCents(c) {
+  const a = Math.abs(c);
+  if (a <= GREEN_CENTS)   return '#30d158';   // green
+  if (a <= YELLOW_CENTS)  return '#ffcc00';   // yellow
+  return '#ff3b30';                         // red
 }
 
-/* ====================== PITCH DETECTION ====================== */
-/* Autocorrelation – fast, works well for a single monophonic note */
+/* Map a cents offset to a pixel coordinate inside a given canvas   */
+function centsToX(cents, canvas) {
+  const half = canvas.width / 2;
+  const pxPerCent = half / DISPLAY_CENTS;   // linear in cents
+  let x = Math.round(half + cents * pxPerCent);
+  if (x < 0) x = 0;
+  if (x >= canvas.width) x = canvas.width - 1;
+  return x;
+}
+
+/* ---------------------------------------------------------
+   4️⃣ SIMPLE AUTOCORRELATION PITCH DETECTOR
+   --------------------------------------------------------- */
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
-  const MAX_SAMPLES = Math.floor(SIZE/2);
-  let bestOffset = -1;
-  let bestCorrelation = 0;
-  let rms = 0;
+  const MAX_SAMPLES = Math.floor(SIZE / 2);
+  let bestOffset = -1, bestCorrelation = 0, rms = 0;
 
-  for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
-  rms = Math.sqrt(rms/SIZE);
-  if (rms < 0.01) return -1;               // silence / very quiet
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1;               // silence / too quiet
 
   let lastCorrelation = 1;
-  for (let offset=0; offset<MAX_SAMPLES; offset++) {
+  for (let offset = 0; offset < MAX_SAMPLES; offset++) {
     let correlation = 0;
-    for (let i=0; i<MAX_SAMPLES; i++) {
-      correlation += Math.abs(buf[i] - buf[i+offset]);
+    // Guard against out‑of‑bounds – this is the fix that stopped crashes
+    if (offset + MAX_SAMPLES > buf.length) break;
+    for (let i = 0; i < MAX_SAMPLES; i++) {
+      correlation += Math.abs(buf[i] - buf[i + offset]);
     }
     correlation = 1 - (correlation / MAX_SAMPLES);
     if (correlation > 0.9 && correlation > lastCorrelation) {
@@ -148,71 +125,123 @@ function autoCorrelate(buf, sampleRate) {
   return sampleRate / bestOffset;
 }
 
-/* ====================== AUDIO PIPELINE ====================== */
+/* ---------------------------------------------------------
+   5️⃣ CANVAS BACKGROUND (grid + centre line)
+   --------------------------------------------------------- */
+function drawCanvasBackground(idx) {
+  const canvas = document.getElementById(`canvas${idx}`);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0,0,w,h);
+
+  // centre (target pitch) line
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w/2,0);
+  ctx.lineTo(w/2,h);
+  ctx.stroke();
+
+  // tick marks every 10 cents (optional)
+  const step = 10;
+  const pxPerCent = (w/2) / DISPLAY_CENTS;
+  ctx.fillStyle = '#777';
+  ctx.font = '9px Arial';
+  ctx.textBaseline = 'top';
+  for (let c = -DISPLAY_CENTS; c <= DISPLAY_CENTS; c += step) {
+    const x = w/2 + c * pxPerCent;
+    ctx.fillRect(x-0.5,0,1,h);
+    if (c !== 0) {
+      ctx.fillText((c>0?`+${c}`:`${c}`), x-10, 2);
+    }
+  }
+}
+
+/* ---------------------------------------------------------
+   6️⃣ SCROLL ONE PIXEL UP (time axis)
+   --------------------------------------------------------- */
+function scrollCanvasUp(canvas) {
+  const ctx = canvas.getContext('2d');
+  const img = ctx.getImageData(0,1,canvas.width,canvas.height-1);
+  ctx.putImageData(img,0,0);
+  // clear the new bottom row (where we will draw the fresh data)
+  ctx.clearRect(0,canvas.height-1,canvas.width,1);
+}
+
+/* ---------------------------------------------------------
+   7️⃣ AUDIO SETUP & MAIN LOOP
+   --------------------------------------------------------- */
 let audioCtx, analyser, source, rafId;
 
 async function startTuner() {
+  const startBtn = document.getElementById('startBtn');
   startBtn.disabled = true;
   startBtn.textContent = '⏳ Starting…';
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    source = audioCtx.createMediaStreamSource(stream);
+    /* Safari/Chrome on iOS keep the context suspended until we resume it */
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    source   = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
     source.connect(analyser);
-    rafId = requestAnimationFrame(updatePitch);
+
+    // draw the grid for each canvas *after* the audio has been created
+    STRINGS.forEach((_,i) => drawCanvasBackground(i));
+
+    rafId = requestAnimationFrame(update);
     startBtn.style.display = 'none';
   } catch (e) {
-    alert('Microphone access denied or unavailable.\n' + e);
+    alert('Microphone error – please allow access.\n' + e);
     startBtn.disabled = false;
-    startBtn.textContent = '🎤 Click to start';
+    startBtn.textContent = '▶️ Click to start';
   }
 }
 
-/* ====================== DRAWING THE TRACE ====================== */
-function shiftCanvasUp() {
-  // copy the image up by 1 pixel (oldest row disappears at the top)
-  const imgData = ctx.getImageData(0,1,canvasW,canvasH-1);
-  ctx.putImageData(imgData,0,0);
-  // clear the new bottom row where we will draw the latest measurement
-  ctx.clearRect(0,canvasH-1,canvasW,1);
-}
+/* ---------------------------------------------------------
+   8️⃣ UPDATE LOOP – read mic, detect pitch, paint canvases
+   --------------------------------------------------------- */
+function update() {
+  const buffer = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buffer);
+  const pitch = autoCorrelate(buffer, audioCtx.sampleRate); // Hz or -1
 
-/* Main loop: read audio → detect pitch → update UI + trace */
-function updatePitch() {
-  const bufferLen = analyser.fftSize;
-  const data = new Float32Array(bufferLen);
-  analyser.getFloatTimeDomainData(data);
-  const freq = autoCorrelate(data, audioCtx.sampleRate);
+  if (pitch !== -1) {
+    // We have a pitch – update every string visualiser
+    STRINGS.forEach((stringInfo, idx) => {
+      const cents = 1200 * Math.log2(pitch / stringInfo.freq);
+      const canvas = document.getElementById(`canvas${idx}`);
+      const freqEl = document.getElementById(`freq${idx}`);
 
-  if (freq !== -1) {
-    const cents = 1200 * Math.log2(freq / TARGET_FREQ);
-    freqEl.textContent = freq.toFixed(2) + ' Hz';
-    setIndicator(cents);
+      // numeric read‑out (rounded)
+      freqEl.textContent = pitch.toFixed(2) + ' Hz';
 
-    // ------- draw new column on the trace -------
-    shiftCanvasUp();   // scroll up 1 pixel
-
-    const colour = getColourFromCents(cents);
-    const pixelsPerHz = (canvasW/2) / DISPLAY_RANGE_HZ; // half‑canvas per side
-    const xOffset = (freq - TARGET_FREQ) * pixelsPerHz; // may be negative
-
-    // Clamp to canvas width (so extreme out‑of‑range pitches just hit the edge)
-    const x = Math.max(0, Math.min(canvasW-1, Math.round(centreX + xOffset)));
-
-    ctx.fillStyle = colour;
-    ctx.fillRect(x, canvasH-1, 1, 1);   // draw a single‑pixel column
+      // scroll then draw the newest column
+      scrollCanvasUp(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = colourFromCents(cents);
+      const x = centsToX(cents, canvas);
+      ctx.fillRect(x, canvas.height-1, 1, 1);
+    });
   } else {
-    freqEl.textContent = '— Hz';
-    setIndicator(0);
-    shiftCanvasUp(); // still scroll, but draw nothing (blank line)
+    // No reliable pitch – just scroll blank lines
+    STRINGS.forEach((_, idx) => {
+      const canvas = document.getElementById(`canvas${idx}`);
+      scrollCanvasUp(canvas);
+    });
   }
-  rafId = requestAnimationFrame(updatePitch);
+
+  rafId = requestAnimationFrame(update);
 }
 
-/* ====================== EVENT LISTENERS ====================== */
-startBtn.addEventListener('click', startTuner);
+/* ---------------------------------------------------------
+   9️⃣ EVENT LISTENERS & Cleanup
+   --------------------------------------------------------- */
+document.getElementById('startBtn').addEventListener('click', startTuner);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && rafId) cancelAnimationFrame(rafId);
 });
