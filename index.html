@@ -18,7 +18,7 @@
   canvas{
     display:block;
     width:100%; height:100%;
-    background:#222;
+    background:#222;               /* water‑fall background */
   }
   .noteLabel{
     position:absolute;
@@ -36,45 +36,72 @@
   }
   .stringRow:not(:last-child)::after{display:block;}
 
-  /* ---- loudness dot (lower‑left) ---- */
+  /* ---- loudness dot (lower‑left) ----
+     Transparent background, red fill with 80 % opacity, perfect disc */
   #volDot{
     position:absolute;
     left:1rem;
     bottom:1rem;
-    width:300px;               /* bigger canvas → bigger dot */
+    width:300px;               /* large enough to show a big dot */
     height:300px;
     pointer-events:none;
+    background:transparent;    /* make the canvas itself transparent */
   }
 </style>
 </head>
 <body>
 
 <div id="tunerContainer"></div>
-<canvas id="volDot"></canvas>               <!-- big red dot -->
+<canvas id="volDot"></canvas>               <!-- loudness indicator -->
 
 <script>
-/*=================================================================
-   1️⃣ GLOBAL DSP CONFIG (all numbers in one place)
-  =================================================================*/
+/*=====================================================================
+   1️⃣ GLOBAL DSP CONFIG – every field now has a short description.
+   =====================================================================*/
 const DSP_CONFIG = {
-  DISPLAY_CENTS   : 80,
-  COLS            : 41,
+  /* How many cents left/right of perfect pitch are shown (± value). */
+  DISPLAY_CENTS   : 60,            // smaller window – easier to see fine tuning
+
+  /* Number of frequency columns in the waterfall (log‑frequency axis). */
+  COLS            : 31,
+
+  /* Number of time‑rows kept in the history (vertical axis). */
   ROWS            : 20,
-  UPDATE_INTERVAL : 200,
+
+  /* How often we run the heavy pitch‑analysis (ms). */
+  UPDATE_INTERVAL : 100,          // 10 updates per second → smoother UI
+
+  /* High‑pass filter cutoff (Hz) – removes rumble. */
   HP_CUT          : 30,
-  LP_CUT          : 1800,           // *** raised to catch B3/E4 ***
+
+  /* Low‑pass filter cutoff (Hz) – now high enough for B3/E4 fundamentals. */
+  LP_CUT          : 1800,
+
+  /* Q‑factor for the two band‑pass filters (Butterworth‑like). */
   BAND_Q          : 0.707,
+
+  /* Size of the FFT used for the analyser (must be a power of 2). */
   FFT_SIZE        : 16384,
-  CORRELATION_MIN : 0.7,
+
+  /* Minimum correlation value required to accept a pitch detection. */
+  CORRELATION_MIN : 0.1,          // more tolerant – lets weak notes appear
+
+  /* Weight of the newest correlation when smoothing (0 → 1). */
   CORRELATION_SMOOTH_ALPHA : 0.4,
+
+  /* Dim factor for non‑active strings (0 → 1). */
   OTHER_DIM_FACTOR : 0.5,
+
+  /* How many raw pitch detections we keep for the median filter. */
   PITCH_HISTORY_LENGTH : 5,
+
+  /* Weight of the *old* correlation when no pitch is detected. */
   SMOOTH_ALPHA_OLD : 0.6
 };
 
-/*=================================================================
+/*=====================================================================
    2️⃣ GUITAR NOTES (standard tuning)
-  =================================================================*/
+   =====================================================================*/
 const STRINGS = [
   {name:'E2', freq: 82.41},
   {name:'A2', freq:110.00},
@@ -84,11 +111,11 @@ const STRINGS = [
   {name:'E4', freq:329.63}
 ];
 
-/*=================================================================
+/*=====================================================================
    3️⃣ UI – one canvas + overlay label per string
-  =================================================================*/
+   =====================================================================*/
 const container = document.getElementById('tunerContainer');
-const canvases = [];
+const canvases = [];                     // keep references to each canvas
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
@@ -100,71 +127,77 @@ STRINGS.forEach(s => {
   canvases.push(row.querySelector('canvas'));
 });
 
-/*=================================================================
-   4️⃣ AUDIO PIPELINE (band‑pass → high‑shelf boost → analyser)
-  =================================================================*/
+/*=====================================================================
+   4️⃣ AUDIO PIPELINE
+       mic → high‑pass → low‑pass → high‑shelf (pre‑emphasis) → analyser
+   =====================================================================*/
 let audioCtx, analyser, source, hp, lp, preEmphasis;
-let lastUpdate = performance.now();
+let lastUpdate = performance.now();     // timestamp of the last analysis
 let rafId = null;
 
 /* histories[string][row] → {col, hue, light, alpha} or null */
 const histories = STRINGS.map(()=>Array(DSP_CONFIG.ROWS).fill(null));
 
-/* smoothing of correlation (exponential) */
+/* Exponential smoothing of the correlation value (for colour/brightness). */
 let smoothedCorrelation = null;
 
-/* pitch history for robust median */
+/* Short‑term pitch history – used for a robust median filter. */
 let pitchHistory = [];
 
-/* current RMS – used only for the volume‑dot */
+/* Latest RMS value – drives the loud‑ness dot. */
 let currentRMS = 0;
 
-/*=================================================================
-   5️⃣ START – request mic, build graph, start loop
-  =================================================================*/
+/*=====================================================================
+   5️⃣ START – request microphone, build graph, start animation loop
+   =====================================================================*/
 async function startTuner(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    /* ---- band‑pass (30 Hz – 1800 Hz) ---- */
+    /* ---------- high‑pass (30 Hz) ---------- */
     hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = DSP_CONFIG.HP_CUT;
     hp.Q.value = DSP_CONFIG.BAND_Q;
 
+    /* ---------- low‑pass (1800 Hz) ---------- */
     lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = DSP_CONFIG.LP_CUT;
     lp.Q.value = DSP_CONFIG.BAND_Q;
 
-    /* ---- high‑shelf boost (linear‑ish with frequency) ---- */
+    /* ---------- high‑shelf “pre‑emphasis”
+        This filter makes the spectrum rise roughly linearly with frequency,
+        i.e. higher‑pitched notes (B3, E4) get a little extra boost. ---------- */
     preEmphasis = audioCtx.createBiquadFilter();
     preEmphasis.type = 'highshelf';
     preEmphasis.frequency.value = 1000;   // start boosting around 1 kHz
-    preEmphasis.gain.value = 6;           // +6 dB; increase if you want more boost
+    preEmphasis.gain.value = 6;           // +6 dB; feel free to adjust
 
+    /* ---------- analyser (FFT) ---------- */
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0;   // we smooth ourselves
+    analyser.smoothingTimeConstant = 0;   // we perform our own smoothing
 
+    /* ---------- connect the graph ---------- */
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
     hp.connect(lp);
-    lp.connect(preEmphasis);   // <-- boost sits here
+    lp.connect(preEmphasis);
     preEmphasis.connect(analyser);
 
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    resizeCanvases();
+    resizeCanvases();                    // pixel‑perfect canvas sizing
     rafId = requestAnimationFrame(mainLoop);
   }catch(e){
     alert('Erreur d’accès au micro :\n'+e);
   }
 }
 
-/*=================================================================
-   6️⃣ Resize canvases (pixel‑perfect)
-  =================================================================*/
+/*=====================================================================
+   6️⃣ Resize canvases – make the drawing buffer match the displayed size
+   =====================================================================*/
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
   rows.forEach(row => {
@@ -178,33 +211,35 @@ function resizeCanvases(){
 }
 window.addEventListener('resize', resizeCanvases);
 
-/*=================================================================
-   7️⃣ AUTOCORRELATION (wide FFT, sub‑sample interpolation)
-  =================================================================*/
+/*=====================================================================
+   7️⃣ AUTOCORRELATION – core pitch‑detection algorithm
+       Returns {freq, correlation, rms} or null (if no clear pitch).
+   =====================================================================*/
 function autoCorrelate(buf, sampleRate){
   const SIZE = buf.length;
   const MAX  = Math.floor(SIZE/2);
-  // ---- RMS (silence detection) ----
+
+  /* ---- RMS (used later for the loudness dot) ---- */
   let rms = 0;
   for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return null;               // too quiet
+  if(rms < 0.01) return null;               // signal too quiet → ignore
 
-  // ---- simple autocorrelation ----
+  /* ---- simple autocorrelation – find the lag with highest similarity ---- */
   let bestOffset = -1, bestCorr = 0, lastCorr = 1;
   for(let offset=0; offset<MAX; offset++){
     let corr = 0;
     if(offset + MAX > buf.length) break;
     for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);
+    corr = 1 - (corr / MAX);                 // normalise to 0‑1
     if(corr > 0.9 && corr > lastCorr){
       if(corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
     }
     lastCorr = corr;
   }
-  if(bestOffset === -1) return null;
+  if(bestOffset === -1) return null;        // no clear peak
 
-  // ---- parabolic interpolation (sub‑sample) ----
+  /* ---- parabolic interpolation – sub‑sample precision ---- */
   const left   = bestOffset > 0 ? 1 - Math.abs(corrAt(buf,bestOffset-1)) : 0;
   const centre = 1 - Math.abs(corrAt(buf,bestOffset));
   const right  = (bestOffset+1 < MAX) ? 1 - Math.abs(corrAt(buf,bestOffset+1)) : 0;
@@ -212,6 +247,8 @@ function autoCorrelate(buf, sampleRate){
   let delta = 0;
   if(denom !== 0) delta = 0.5 * (left - right) / denom;
   const refined = bestOffset + delta;
+
+  /* ---- convert lag → frequency (Hz) ---- */
   const pitch = sampleRate / refined;
   return {freq:pitch, correlation:bestCorr, rms};
 }
@@ -222,16 +259,17 @@ function corrAt(buf, offset){
   return corr / MAX;
 }
 
-/*=================================================================
-   8️⃣ HELPERS – colour, lightness, opacity, mapping
-  =================================================================*/
+/*=====================================================================
+   8️⃣ HELPERS – colour, lightness, opacity, coordinate conversion
+   =====================================================================*/
 function hueFromCents(c){
   const max = DSP_CONFIG.DISPLAY_CENTS;
   const lim = Math.max(-max, Math.min(max, c));
+  // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
   return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
 }
-function lightnessFromCorr(c){ return 10 + 80 * c; }
-function alphaFromCorr(c){ return c; }
+function lightnessFromCorr(c){ return 10 + 80 * c; }   // 10 % → 90 %
+function alphaFromCorr(c){ return c; }               // opacity = correlation
 
 function centsToCol(cents){
   const step = (2*DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS-1);
@@ -249,24 +287,24 @@ function centsToX(cents, canvas){
   return x;
 }
 
-/*=================================================================
+/*=====================================================================
    9️⃣ MEDIAN utility – robust pitch from recent history
-  =================================================================*/
+   =====================================================================*/
 function median(arr){
   const sorted = arr.slice().sort((a,b)=>a-b);
   const mid = Math.floor(sorted.length/2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
 }
 
-/*=================================================================
-   🔟 DRAW THE LOUDNESS DOT (lower‑left)
-  =================================================================*/
+/*=====================================================================
+   🔟 DRAW THE LOUDNESS DOT (transparent canvas, 80 % opaque red disc)
+   =====================================================================*/
 function drawVolumeDot(){
   const dot = document.getElementById('volDot');
   const ctx = dot.getContext('2d');
   const w = dot.width, h = dot.height;
 
-  ctx.clearRect(0,0,w,h);
+  ctx.clearRect(0,0,w,h);                    // erase previous frame
 
   // Map RMS (0 … 0.30) → radius (0 … 140 px)
   const maxRMS   = 0.30;
@@ -275,41 +313,50 @@ function drawVolumeDot(){
                          Math.max(0,
                            (currentRMS - 0) / (maxRMS - 0) * maxRadius));
 
-  // perfect filled disc (no border)
+  // Perfect disc, filled with 80 % opacity (globalAlpha = 0.8)
   ctx.fillStyle = '#ff4444';
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.8;                     // 80 % opacity
   ctx.beginPath();
   ctx.arc(w/2, h/2, radius, 0, Math.PI*2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+
+  ctx.globalAlpha = 1;                       // restore default alpha
 }
 
-/*=================================================================
-   1️⃣1️⃣ MAIN LOOP (requestAnimationFrame)
-  =================================================================*/
+/*=====================================================================
+   1️⃣1️⃣ MAIN LOOP – runs every animation frame.
+       * Every `UPDATE_INTERVAL` ms we do the heavy pitch analysis.
+       * RMS → loudness dot.
+       * Autocorrelation → raw pitch.
+       * Median filter → robust pitch.
+       * Exponential smoothing of correlation (for colour/brightness).
+       * Determine which string is “active” (closest in cents).
+       * Push a new row into the waterfall history for each string.
+       * Finally draw everything.
+   =====================================================================*/
 let lastActiveIdx = -1;          // which string is currently the “active” one
 function mainLoop(timestamp){
   // --------------------------------------------------------------
-  // 1️⃣ Analyse audio every UPDATE_INTERVAL
+  // 1️⃣ Run the heavy pitch analysis only every UPDATE_INTERVAL ms.
   // --------------------------------------------------------------
   if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
     const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);
+    analyser.getFloatTimeDomainData(buf);   // get the time‑domain signal
 
-    // ---- RMS (volume) ----
+    /* ---- 1️⃣ Compute RMS (used for the loudness dot) ---- */
     let sum = 0;
     for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
     const rms = Math.sqrt(sum / buf.length);
-    currentRMS = rms;                     // used by the loudness dot
+    currentRMS = rms;                       // drive the dot
 
-    // ---- pitch detection ----
+    /* ---- 2️⃣ Pitch detection via autocorrelation ---- */
     const rawInfo = autoCorrelate(buf, audioCtx.sampleRate); // {freq, correlation, rms} or null
 
-    // keep short raw‑history for robust median
+    /* ---- 3️⃣ Store raw detections for the median filter ---- */
     pitchHistory.push(rawInfo);
     if (pitchHistory.length > DSP_CONFIG.PITCH_HISTORY_LENGTH) pitchHistory.shift();
 
-    // median of valid detections
+    /* ---- 4️⃣ Median filter – gives a more stable pitch value ---- */
     const valid = pitchHistory.filter(v=>v!==null);
     let robustInfo = null;
     if(valid.length){
@@ -322,9 +369,11 @@ function mainLoop(timestamp){
       }
     }
 
-    // --------------------------------------------------------------
-    // 2️⃣ Exponential smoothing of correlation
-    // --------------------------------------------------------------
+    /* --------------------------------------------------------------
+       5️⃣ Exponential smoothing of the correlation (used for colour
+          intensity). If no pitch is detected we let the old value
+          decay with SMOOTH_ALPHA_OLD.
+       -------------------------------------------------------------- */
     if(robustInfo){
       if(smoothedCorrelation===null) smoothedCorrelation = robustInfo.correlation;
       else{
@@ -336,16 +385,24 @@ function mainLoop(timestamp){
       if(smoothedCorrelation!==null) smoothedCorrelation *= DSP_CONFIG.SMOOTH_ALPHA_OLD;
     }
 
-    // --------------------------------------------------------------
-    // 3️⃣ Determine the “active” string (closest in cents)
-    // --------------------------------------------------------------
+    /* --------------------------------------------------------------
+       6️⃣ Determine which string is the “active” one.
+          For every string we compute the distance in **cents**:
+          ```
+          cents = 1200 * log2( measuredFreq / referenceFreq )
+          ```
+          *1200* is the number of cents in one octave
+          (100 cents per semitone × 12 semitones = 1200).  
+          `log2(freq / ref)` gives the number of octaves difference,
+          multiplying by 1200 converts that to cents.
+       -------------------------------------------------------------- */
     let activeIdx = -1;
     let minAbs = Infinity;
     const centsArray = new Array(STRINGS.length).fill(null);
     if(robustInfo){
       const {freq} = robustInfo;
       STRINGS.forEach((s,i)=>{
-        const cents = 1200*Math.log2(freq / s.freq);
+        const cents = 1200 * Math.log2(freq / s.freq);   // 1200 = cents per octave
         centsArray[i] = cents;
         const abs = Math.abs(cents);
         if(abs < minAbs){
@@ -353,13 +410,14 @@ function mainLoop(timestamp){
           activeIdx = i;
         }
       });
-      if(minAbs > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;   // safety
+      // If the deviation is larger than the displayed window we discard it.
+      if(minAbs > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
     }
     lastActiveIdx = activeIdx;
 
-    // --------------------------------------------------------------
-    // 4️⃣ Update visual histories
-    // --------------------------------------------------------------
+    /* --------------------------------------------------------------
+       7️⃣ Push a new row into the waterfall history for every string.
+       -------------------------------------------------------------- */
     STRINGS.forEach((s, idx) => {
       let entry = null;
       if(robustInfo){
@@ -382,21 +440,21 @@ function mainLoop(timestamp){
   }
 
   // --------------------------------------------------------------
-  // 5️⃣ Draw the water‑fall (unchanged)
+  // 8️⃣ Draw the waterfall visualisation (unchanged apart from config values)
   // --------------------------------------------------------------
   drawAllCanvases();
 
   // --------------------------------------------------------------
-  // 6️⃣ Draw the loudness dot (every animation frame)
+  // 9️⃣ Draw the loudness dot (transparent canvas, 80 % opaque disc)
   // --------------------------------------------------------------
   drawVolumeDot();
 
   rafId = requestAnimationFrame(mainLoop);
 }
 
-/*=================================================================
-   1️⃣2️⃣ DRAWING ROUTINE (water‑fall)
-  =================================================================*/
+/*=====================================================================
+   1️⃣3️⃣ DRAWING ROUTINE – waterfall + note label
+   =====================================================================*/
 function drawAllCanvases(){
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
@@ -404,11 +462,11 @@ function drawAllCanvases(){
     const colW = canvas.width / DSP_CONFIG.COLS;
     const rowH = canvas.height / DSP_CONFIG.ROWS;
 
-    // 1️⃣ background
+    /* ---- 1️⃣ background ---- */
     ctx.fillStyle = '#222';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // 2️⃣ guide lines (centre + ±10 cents)
+    /* ---- 2️⃣ guide lines (center and ±10 cents) ---- */
     const centreX = canvas.width/2;
     const leftX   = centsToX(-10, canvas);
     const rightX  = centsToX(10,  canvas);
@@ -420,17 +478,17 @@ function drawAllCanvases(){
     ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
     ctx.stroke();
 
-    // 3️⃣ draw history rows (oldest at top)
-    histories[idx].forEach((entry, rowIdxHist) => {
+    /* ---- 3️⃣ draw the stored history rows (oldest at the top) ---- */
+    histories[idx].forEach((entry, rowIdx) => {
       if(!entry) return;
       ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
       ctx.globalAlpha = entry.alpha;
-      const y = rowIdxHist * rowH;
+      const y = rowIdx * rowH;
       ctx.fillRect(entry.col * colW, y, colW, rowH);
     });
-    ctx.globalAlpha = 1;   // reset for text
+    ctx.globalAlpha = 1;   // reset alpha for the next drawing step
 
-    // 4️⃣ big note name for the active string
+    /* ---- 4️⃣ big note name for the active string (if any) ---- */
     if(lastActiveIdx === idx && histories[idx].length){
       const latest = histories[idx][histories[idx].length-1];
       if(latest){
@@ -446,9 +504,9 @@ function drawAllCanvases(){
   });
 }
 
-/*=================================================================
-   1️⃣3️⃣ AUTO‑START on page load
-  =================================================================*/
+/*=====================================================================
+   1️⃣4️⃣ AUTO‑START on page load
+   =====================================================================*/
 window.addEventListener('load', startTuner);
 </script>
 </body>
