@@ -23,9 +23,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      showgrid="false"
-     inkscape:zoom="6.1464839"
-     inkscape:cx="89.075317"
-     inkscape:cy="160.17288"
+     inkscape:zoom="0.84009381"
+     inkscape:cx="-97.012976"
+     inkscape:cy="362.45952"
      inkscape:window-width="1264"
      inkscape:window-height="908"
      inkscape:window-x="0"
@@ -63,13 +63,28 @@
   <text
      xml:space="preserve"
      style="font-size:18.3738px;font-family:Verdana;-inkscape-font-specification:'Verdana, Normal';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#ffffff;stroke-width:2.66426"
-     x="98.793991"
-     y="138.0481"
+     x="131.72954"
+     y="145.2756"
      id="text6"
      transform="scale(1.011965,0.98817646)"><tspan
        sodipodi:role="line"
        id="tspan6"
-       x="98.793983"
-       y="138.0481"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.4011px;font-family:Raanana;-inkscape-font-specification:'Raanana, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#1a1a1a;stroke-width:2.66426">guitoune</tspan></text>
+       x="131.72954"
+       y="145.2756"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.4011px;font-family:Raanana;-inkscape-font-specification:'Raanana, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#1a1a1a;stroke-width:2.66426">toune</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-size:18.3738px;font-family:Verdana;-inkscape-font-specification:'Verdana, Normal';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#ffffff;stroke-width:2.66426"
+     x="48.358051"
+     y="72.881516"
+     id="text6-9"
+     transform="scale(1.011965,0.98817646)"
+     inkscape:transform-center-x="40.471671"
+     inkscape:transform-center-y="-29.758582"><tspan
+       sodipodi:role="line"
+       id="tspan6-3"
+       x="48.358051"
+       y="72.881516"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.4011px;font-family:Raanana;-inkscape-font-specification:'Raanana, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#1a1a1a;stroke-width:2.66426"
+       dx="0 0 0">gui</tspan></text>
 </svg>
