@@ -9,9 +9,8 @@
     background:#111; color:#eee;
     font-family:Arial,Helvetica,sans-serif;
   }
-  /* One row per string – each row occupies 1/6 of the viewport height */
   .stringRow{
-    position:relative;                 /* parent for absolute label */
+    position:relative;                /* for the overlay label & separator */
     width:100%;
     height:calc(100vh/6);
     overflow:hidden;
@@ -19,20 +18,22 @@
   canvas{
     display:block;
     width:100%; height:100%;           /* fill the whole row */
-    background:#222;                  /* fallback while we draw */
+    background:#222;
   }
   .noteLabel{
     position:absolute;
-    right:0.5rem;                       /* a little margin from the edge */
-    top:50%;                           /* centre vertically */
-    transform:translateY(-50%);
-    font-size:2.4rem;
-    font-weight:bold;
-    color:#fff;
-    text-shadow:0 0 6px rgba(0,0,0,0.9);
-    pointer-events:none;              /* clicks go to the canvas */
-    z-index:2;
+    right:0.5rem;
+    top:50%; transform:translateY(-50%);
+    font-size:2.4rem; font-weight:bold;
+    color:#fff; text-shadow:0 0 6px rgba(0,0,0,0.9);
+    pointer-events:none; z-index:2;
   }
+  .stringRow::after{
+    content:""; position:absolute;
+    left:0; right:0; bottom:0; height:2px;
+    background:#555; display:none;
+  }
+  .stringRow:not(:last-child)::after{display:block;}
 </style>
 </head>
 <body>
@@ -41,7 +42,7 @@
 
 <script>
 /* ---------------------------------------------------------
-   SETTINGS
+   1️⃣ SETTINGS
    --------------------------------------------------------- */
 const STRINGS = [
   {name:'E2', freq: 82.41},
@@ -52,30 +53,12 @@ const STRINGS = [
   {name:'E4', freq:329.63}
 ];
 
-const DISPLAY_CENTS = 50;          // ±50 cents visible left↔right
+const DISPLAY_CENTS = 50;          // ±50 cents shown left↔right
 const COLS = 21;                   // columns (log‑frequency)
 const ROWS = 10;                   // rows (time)
 
-// colour helpers -------------------------------------------------
-function hueFromCents(c){
-  const max = DISPLAY_CENTS;
-  const lim = Math.max(-max, Math.min(max, c));
-  // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
-  return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
-}
-function lightnessFromCorr(c){
-  return 30 + 55 * c;               // 0‑1 → 30‑85 %
-}
-function centsToCol(cents){
-  const step = (2 * DISPLAY_CENTS) / (COLS - 1);
-  let col = Math.round((cents + DISPLAY_CENTS) / step);
-  if (col < 0) col = 0;
-  if (col >= COLS) col = COLS - 1;
-  return col;
-}
-
 /* ---------------------------------------------------------
-   BUILD UI – one canvas + overlay label per string
+   2️⃣ UI – one canvas + overlay label per string
    --------------------------------------------------------- */
 const container = document.getElementById('tunerContainer');
 const canvases = [];                // keep a reference to each canvas
@@ -87,22 +70,21 @@ STRINGS.forEach(s => {
     <div class="noteLabel">${s.name}</div>
   `;
   container.appendChild(row);
-  const canvas = row.querySelector('canvas');
-  canvases.push(canvas);
+  canvases.push(row.querySelector('canvas'));
 });
 
 /* ---------------------------------------------------------
-   AUDIO + PITCH DETECTION
+   3️⃣ AUDIO GRAPH (band‑pass 70‑450 Hz) + analyser
    --------------------------------------------------------- */
 let audioCtx, analyser, source, highPass, lowPass, rafId;
-const rowIndices = new Array(STRINGS.length).fill(0); // current time‑row
+const rowIndices = new Array(STRINGS.length).fill(0); // current time‑row per string
 
 async function startTuner(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    /* ----- band‑pass filter (70 Hz – 450 Hz) ----- */
+    /* ----- band‑pass (70 Hz – 450 Hz) ----- */
     highPass = audioCtx.createBiquadFilter();
     highPass.type = 'highpass';
     highPass.frequency.value = 70;
@@ -114,7 +96,8 @@ async function startTuner(){
     lowPass.Q.value = 0.707;
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 4096;                 // larger window → smoother pitch
+    analyser.fftSize = 4096;                     // ~92 ms window
+    analyser.smoothingTimeConstant = 0;           // no extra smoothing – we handle fading ourselves
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(highPass);
@@ -131,7 +114,7 @@ async function startTuner(){
 }
 
 /* ---------------------------------------------------------
-   Resize canvases to match their displayed size (pixel‑perfect)
+   4️⃣ Resize canvases to device‑pixel size
    --------------------------------------------------------- */
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
@@ -147,40 +130,80 @@ function resizeCanvases(){
 window.addEventListener('resize', resizeCanvases);
 
 /* ---------------------------------------------------------
-   Autocorrelation pitch detector (returns {freq, correlation})
+   5️⃣ HARMONIC‑BASED PITCH DETECTOR
+   ---------------------------------------------------------
+   Returns {freq, correlation} or null
    --------------------------------------------------------- */
-function detectPitch(buf, sampleRate){
-  const SIZE = buf.length;
-  const MAX = Math.floor(SIZE/2);
-  // RMS → discard silence
-  let rms = 0;
-  for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
-  rms = Math.sqrt(rms/SIZE);
-  if (rms < 0.01) return null;                 // too quiet
+function detectPitchWithHarmonics(){
+  const freqData = new Float32Array(analyser.frequencyBinCount);
+  analyser.getFloatFrequencyData(freqData);      // dB values (negative)
 
-  let bestOffset = -1, bestCorr = 0, lastCorr = 1;
-  for (let offset=0; offset<MAX; offset++) {
-    let corr = 0;
-    if (offset + MAX > buf.length) break;
-    for (let i=0; i<MAX; i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);                    // normalised 0‑1
-    if (corr > 0.9 && corr > lastCorr) {
-      if (corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
+  const sampleRate = audioCtx.sampleRate;
+  const binWidth   = sampleRate / analyser.fftSize;   // Hz per bin
+
+  const lowBin  = Math.floor(70  / binWidth);
+  const highBin = Math.ceil (450 / binWidth);
+
+  // ---- 1️⃣ find local maxima above a modest threshold ----
+  const THRESHOLD_DB = -80;                     // ignore very quiet bins
+  const peaks = [];
+  for(let i=lowBin+1; i<highBin-1; i++){
+    if(freqData[i] > THRESHOLD_DB &&
+       freqData[i] > freqData[i-1] &&
+       freqData[i] > freqData[i+1]){
+      peaks.push({bin:i, db:freqData[i]});
     }
-    lastCorr = corr;
   }
-  if (bestOffset === -1) return null;
-  const freq = sampleRate / bestOffset;
-  return {freq, correlation:bestCorr};
+  if(peaks.length===0) return null;
+
+  // sort by magnitude (db) – remember higher dB = louder (less negative)
+  peaks.sort((a,b)=>b.db-a.db);
+  const topPeaks = peaks.slice(0,6);             // we only need the strongest few
+
+  // ---- 2️⃣ build harmonic candidates -----------------------
+  const MAX_HARMONIC = 5;
+  const candidates = [];
+
+  topPeaks.forEach(p=>{
+    const fPeak = p.bin * binWidth;
+    for(let h=1; h<=MAX_HARMONIC; h++){
+      const f0 = fPeak / h;
+      if(f0 < 70 || f0 > 450) continue;      // keep inside plausible range
+
+      // score how many other peaks line up with integer multiples of f0
+      let score = 0, weight = 0;
+      topPeaks.forEach(q=>{
+        const fq = q.bin * binWidth;
+        const harmonic = Math.round(fq / f0);
+        if(harmonic < 1) return;
+        const expected = f0 * harmonic;
+        const cents = 1200*Math.log2(fq/expected);
+        if(Math.abs(cents) < 3){                // ±3 cents tolerance
+          score++;
+          weight += q.db;                        // louder peaks weigh more
+        }
+      });
+      candidates.push({f0, score, weight});
+    }
+  });
+
+  if(candidates.length===0) return null;
+  candidates.sort((a,b)=>{
+    if(b.score!==a.score) return b.score-a.score;
+    return b.weight-a.weight;
+  });
+  const best = candidates[0];
+
+  // confidence (correlation) – normalise to 0‑1
+  const confidence = Math.min(1, best.score / MAX_HARMONIC);
+  return {freq:best.f0, correlation:confidence};
 }
 
 /* ---------------------------------------------------------
-   MAIN UPDATE LOOP – draw fading coloured dots
+   6️⃣ MAIN UPDATE LOOP – draw fading dots + guide lines
    --------------------------------------------------------- */
 function update(){
-  const buf = new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(buf);
-  const pitchInfo = detectPitch(buf, audioCtx.sampleRate);
+  const pitchInfo = detectPitchWithHarmonics();   // ← new detector
 
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
@@ -189,12 +212,26 @@ function update(){
     const colW = canvas.width  / COLS;
     const rowH = canvas.height / ROWS;
 
-    /* 1️⃣ Fade the whole canvas a little (older dots darken) */
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';   // tweak alpha for speed of fade
+    /* 1️⃣ Fade older content */
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';            // older dots darken gradually
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    /* 2️⃣ If a pitch is detected, draw a new coloured block */
-    if (pitchInfo){
+    /* 2️⃣ Draw three vertical guide lines (always visible) */
+    const centreX = canvas.width/2;
+    const leftX   = centsToX(-10, canvas);        // -10 cents
+    const rightX  = centsToX(10,  canvas);        // +10 cents
+
+    ctx.strokeStyle = '#30d158'; ctx.lineWidth = 2; // centre – green
+    ctx.beginPath(); ctx.moveTo(centreX,0); ctx.lineTo(centreX,canvas.height);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1; // outer – orange
+    ctx.beginPath(); ctx.moveTo(leftX,0); ctx.lineTo(leftX,canvas.height);
+    ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
+    ctx.stroke();
+
+    /* 3️⃣ If we have a pitch, draw the coloured block */
+    if(pitchInfo){
       const {freq, correlation} = pitchInfo;
       const cents = 1200 * Math.log2(freq / s.freq);
       const col   = centsToCol(cents);
@@ -207,7 +244,7 @@ function update(){
       ctx.fillRect(col * colW, y, colW, rowH);
     }
 
-    /* 3️⃣ Advance the “time‑row” (wrap after ROWS) */
+    /* 4️⃣ Advance the scrolling row (wrap) */
     rowIndices[idx] = (rowIndices[idx] + 1) % ROWS;
   });
 
@@ -215,11 +252,34 @@ function update(){
 }
 
 /* ---------------------------------------------------------
-   AUTO‑START on page load (asks for mic permission)
+   7️⃣ Helper functions (colour ↔ cents ↔ pixel)
    --------------------------------------------------------- */
-window.addEventListener('load', () => {
-  startTuner();
-});
+function hueFromCents(c){
+  const max = DISPLAY_CENTS;
+  const lim = Math.max(-max, Math.min(max, c));
+  return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
+}
+function lightnessFromCorr(c){ return 30 + 55 * c; }   // 0‑1 → 30‑85%
+function centsToCol(cents){
+  const step = (2 * DISPLAY_CENTS) / (COLS - 1);
+  let col = Math.round((cents + DISPLAY_CENTS) / step);
+  if(col < 0) col = 0;
+  if(col >= COLS) col = COLS - 1;
+  return col;
+}
+function centsToX(cents, canvas){
+  const half = canvas.width/2;
+  const pxPerCent = half / DISPLAY_CENTS;
+  let x = Math.round(half + cents * pxPerCent);
+  if(x < 0) x = 0;
+  if(x >= canvas.width) x = canvas.width-1;
+  return x;
+}
+
+/* ---------------------------------------------------------
+   8️⃣ Auto‑start on page load (mic permission)
+   --------------------------------------------------------- */
+window.addEventListener('load', startTuner);
 </script>
 </body>
 </html>
