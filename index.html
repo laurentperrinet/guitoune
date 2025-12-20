@@ -10,7 +10,7 @@
     font-family:Arial,Helvetica,sans-serif;
   }
   .stringRow{
-    position:relative;                /* for label & separator */
+    position:relative;                /* label & separator */
     width:100%;
     height:calc(100vh/6);
     overflow:hidden;
@@ -18,7 +18,7 @@
   canvas{
     display:block;
     width:100%; height:100%;
-    background:#222;
+    background:#222;               /* cleared each redraw */
   }
   .noteLabel{
     position:absolute;
@@ -42,7 +42,21 @@
 
 <script>
 /* ---------------------------------------------------------
-   SETTINGS
+   1️⃣ SETTINGS (the ones you asked for)
+   --------------------------------------------------------- */
+const DISPLAY_CENTS = 50;          // ±50 cents shown left↔right
+const COLS = 41;                   // columns (log‑frequency)
+const ROWS = 20;                   // rows (time)
+const UPDATE_INTERVAL = 100;       // UI refresh every 100 ms (10 Hz)
+
+const HP_CUT = 70;                 // band‑pass low‑cut
+const LP_CUT = 450;                // band‑pass high‑cut
+const BAND_Q = 0.707;              // Butterworth‑type Q
+
+const OTHER_DIM_FACTOR = 0.5;      // dim factor for non‑active strings
+
+/* ---------------------------------------------------------
+   2️⃣ STANDARD‑TUNING STRINGS
    --------------------------------------------------------- */
 const STRINGS = [
   {name:'E2', freq: 82.41},
@@ -53,22 +67,11 @@ const STRINGS = [
   {name:'E4', freq:329.63}
 ];
 
-const DISPLAY_CENTS = 50;          // ±50 cents shown left↔right
-const COLS = 41;                  // columns (log‑frequency)
-const ROWS = 10;                  // rows (time)
-const UPDATE_INTERVAL = 100;     // UI refresh every 100 ms (10 Hz)
-
-const HP_CUT = 70;                // band‑pass low‑cut
-const LP_CUT = 450;               // band‑pass high‑cut
-const BAND_Q = 0.707;             // Butterworth‑type Q
-
-const OTHER_DIM_FACTOR = 0.2;      // how much to dim the “non‑active” strings
-
 /* ---------------------------------------------------------
-   UI – one canvas + overlay label per string
+   3️⃣ BUILD UI – one canvas + right‑hand label per string
    --------------------------------------------------------- */
 const container = document.getElementById('tunerContainer');
-const canvases = [];                // keep canvas refs
+const canvases = [];                     // keep canvas references
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
@@ -81,10 +84,12 @@ STRINGS.forEach(s => {
 });
 
 /* ---------------------------------------------------------
-   AUDIO GRAPH (band‑pass + analyser)
+   4️⃣ AUDIO PIPELINE (band‑pass + analyser)
    --------------------------------------------------------- */
 let audioCtx, analyser, source, hp, lp, intervalId;
-const rowIdx = new Array(STRINGS.length).fill(0); // scrolling row per string
+const rowIdx = new Array(STRINGS.length).fill(0);   // not used any more
+/* history[ stringIndex ][ row ]  →  {col, hue, light}  */
+const histories = STRINGS.map(()=>Array(ROWS).fill(null));
 
 async function startTuner(){
   try{
@@ -103,8 +108,8 @@ async function startTuner(){
     lp.Q.value = BAND_Q;
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 8192;                 // wider window → more robust pitch
-    analyser.smoothingTimeConstant = 0;      // we handle fading ourselves
+    analyser.fftSize = 8192;                // wider window → smoother pitch
+    analyser.smoothingTimeConstant = 0;    // we handle visual fading ourselves
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -114,8 +119,6 @@ async function startTuner(){
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     resizeCanvases();
-
-    // UI updates at a human‑playable rate (10 Hz)
     intervalId = setInterval(update, UPDATE_INTERVAL);
   }catch(e){
     alert('Microphone access error:\n'+e);
@@ -123,7 +126,7 @@ async function startTuner(){
 }
 
 /* ---------------------------------------------------------
-   Resize canvases to match device pixel dimensions
+   5️⃣ Resize canvases to device‑pixel size
    --------------------------------------------------------- */
 function resizeCanvases(){
   const rows = document.querySelectorAll('.stringRow');
@@ -139,7 +142,7 @@ function resizeCanvases(){
 window.addEventListener('resize', resizeCanvases);
 
 /* ---------------------------------------------------------
-   AUTOCORRELATION (wide FFT, sub‑sample interpolation)
+   6️⃣ AUTOCORRELATION (wide FFT, sub‑sample interpolation)
    --------------------------------------------------------- */
 function autoCorrelate(buf, sampleRate){
   const SIZE = buf.length;
@@ -185,11 +188,12 @@ function corrAt(buf, offset){
 }
 
 /* ---------------------------------------------------------
-   Helper functions – colour ↔ cents ↔ pixel
+   7️⃣ Helpers – colour ↔ cents ↔ pixel
    --------------------------------------------------------- */
 function hueFromCents(c){
   const max = DISPLAY_CENTS;
   const lim = Math.max(-max, Math.min(max, c));
+  // -max → 0° (red) | 0 → 120° (green) | +max → 240° (blue)
   return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
 }
 function lightnessFromCorr(c){ return 30 + 55 * c; }   // 0‑1 → 30‑85 %
@@ -210,49 +214,66 @@ function centsToX(cents, canvas){
 }
 
 /* ---------------------------------------------------------
-   MAIN UPDATE – runs every UPDATE_INTERVAL (100 ms)
+   8️⃣ MAIN UPDATE – runs every UPDATE_INTERVAL (100 ms)
    --------------------------------------------------------- */
 function update(){
   const buf = new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(buf);
   const pitchInfo = autoCorrelate(buf, audioCtx.sampleRate); // {freq, correlation} or null
 
-  // ---- Determine which string is the “active” one (closest cents) ----
+  // ---------- Find which string is the “active” one ----------
   let activeIdx = -1;
-  let smallestAbsCents = Infinity;
-  const centsArray = new Array(STRINGS.length).fill(null); // store per‑string cents
+  let minAbsCents = Infinity;
+  const centsArray = new Array(STRINGS.length).fill(null);
 
   if(pitchInfo){
     const {freq} = pitchInfo;
-    STRINGS.forEach((s, i) => {
+    STRINGS.forEach((s,i) => {
       const cents = 1200 * Math.log2(freq / s.freq);
       centsArray[i] = cents;
       const abs = Math.abs(cents);
-      if(abs < smallestAbsCents){
-        smallestAbsCents = abs;
+      if(abs < minAbsCents){
+        minAbsCents = abs;
         activeIdx = i;
       }
     });
-    // If the best match is more than DISPLAY_CENTS away, treat as “no active string”
-    if(smallestAbsCents > DISPLAY_CENTS) activeIdx = -1;
+    // If the best match is farther than our display window, treat as “no active”
+    if(minAbsCents > DISPLAY_CENTS) activeIdx = -1;
   }
 
-  // ---- Draw each canvas -------------------------------------------------
+  // ---------- Update histories for every string ----------
+  STRINGS.forEach((s, idx) => {
+    // If there is a pitch, compute colour for this string; otherwise store null.
+    let entry = null;
+    if(pitchInfo){
+      const cents = centsArray[idx];
+      const col   = centsToCol(cents);
+      const hue   = hueFromCents(cents);
+      const baseLight = lightnessFromCorr(pitchInfo.correlation);
+      const light = (activeIdx===idx) ? baseLight : baseLight * OTHER_DIM_FACTOR;
+      entry = {col, hue, light};
+    }
+    // push newest entry, drop oldest if we exceed ROWS
+    histories[idx].push(entry);
+    if(histories[idx].length > ROWS) histories[idx].shift();
+  });
+
+  // ---------- Redraw each canvas ----------
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     const ctx = canvas.getContext('2d');
 
-    const colW = canvas.width / COLS;
+    const colW = canvas.width  / COLS;
     const rowH = canvas.height / ROWS;
 
-    // 1️⃣ fade previous content
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    // 1️⃣ clear background (keep a dark grey)
+    ctx.fillStyle = '#222';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // 2️⃣ vertical guide lines (always)
+    // 2️⃣ draw the three vertical guide lines (always same colour)
     const centreX = canvas.width/2;
     const leftX   = centsToX(-10, canvas);
-    const rightX  = centsToX(10, canvas);
+    const rightX  = centsToX(10,  canvas);
 
     ctx.strokeStyle = '#30d158'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(centreX,0); ctx.lineTo(centreX,canvas.height);
@@ -263,26 +284,25 @@ function update(){
     ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
     ctx.stroke();
 
-    // 3️⃣ draw a coloured block if we have a pitch
-    if(pitchInfo){
+    // 3️⃣ draw the stored history rows (oldest on top, newest at bottom)
+    histories[idx].forEach((entry, rowIdxHist) => {
+      if(!entry) return;                 // empty slot (no detection yet)
+      ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
+      const y = rowIdxHist * rowH;        // row 0 = top, row ROWS‑1 = bottom (current)
+      ctx.fillRect(entry.col * colW, y, colW, rowH);
+    });
+
+    // 4️⃣ If this canvas is the active one, draw the big note name in the centre
+    if(activeIdx === idx && pitchInfo){
       const cents = centsArray[idx];
       const hue   = hueFromCents(cents);
-      // base lightness from correlation
-      let light   = lightnessFromCorr(pitchInfo.correlation);
-      // dim non‑active strings
-      if(activeIdx !== -1 && idx !== activeIdx){
-        light *= OTHER_DIM_FACTOR;          // make them much darker
-      }
+      const light = lightnessFromCorr(pitchInfo.correlation);
       ctx.fillStyle = `hsl(${hue},100%,${light}%)`;
-
-      const col = centsToCol(cents);
-      const row = rowIdx[idx];
-      const y   = canvas.height - (row + 1) * rowH; // bottom‑most row = 0
-      ctx.fillRect(col * colW, y, colW, rowH);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 3.6rem Arial,Helvetica,sans-serif';
+      ctx.fillText(s.name, canvas.width/2, canvas.height/2);
     }
-
-    // 4️⃣ advance the scrolling row
-    rowIdx[idx] = (rowIdx[idx] + 1) % ROWS;
   });
 }
 
