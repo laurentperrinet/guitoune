@@ -3,6 +3,9 @@
 (:fr: french below)
 
 Why need an app when you can do it online?  
+<p align="center">
+  <img src="logo.svg" alt="Guitoune logo" width="120"/>
+</p>
 
 ---  
 
