@@ -2,108 +2,293 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Guitoune: the mobile‑Friendly Guitar Tuner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guitoune: Guitar Tuner</title>
 <style>
-  html,body{
-    margin:0; height:100%; overflow:hidden;
-    background:#111; color:#eee;
-    font-family:Arial,Helvetica,sans-serif;
+  * { box-sizing: border-box; }
+  
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    color: #eee;
+    font-family: Arial, Helvetica, sans-serif;
   }
-  .stringRow{
-    position:relative;
-    width:100%;
-    height:calc(100vh/6);
-    overflow:hidden;
+  
+  #debug {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 10px;
+    font-size: 12px;
+    z-index: 1000;
+    border: 1px solid #30d158;
   }
-  canvas{
-    display:block;
-    width:100%; height:100%;
-    background:#222;               /* water‑fall background */
+  
+  #volumeIndicator {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 80px;
+    height: 80px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .noteLabel{
-    position:absolute;
-    right:0.5rem;
-    top:50%; transform:translateY(-50%);
-    font-size:2.4rem; font-weight:bold;
-    color:#fff;                     /* default colour – white */
-    text-shadow:0 0 6px rgba(0,0,0,0.9);
-    pointer-events:none; z-index:2;
+  
+  #volumeDot {
+    border-radius: 50%;
+    background: radial-gradient(circle, #30d158, #20a040);
+    box-shadow: 0 0 20px rgba(48, 209, 88, 0.6);
+    transition: width 0.1s ease, height 0.1s ease;
   }
-  .stringRow::after{
-    content:"";
-    position:absolute;
-    left:0; right:0; bottom:0; height:2px;
-    background:#555; display:none;
+  
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
   }
-  .stringRow:not(:last-child)::after{display:block;}
+  
+  .tabs {
+    display: flex;
+    background: #1a1a1a;
+    border-bottom: 2px solid #333;
+  }
+  
+  .tab {
+    flex: 1;
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    background: #222;
+    border: none;
+    color: #999;
+    font-size: 1rem;
+    transition: all 0.3s;
+  }
+  
+  .tab.active {
+    background: #111;
+    color: #30d158;
+    border-bottom: 2px solid #30d158;
+  }
+  
+  .page {
+    display: none;
+    flex: 1;
+    overflow: auto;
+  }
+  
+  .page.active {
+    display: block;
+  }
+  
+  #tunerPage {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .stringRow {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    overflow: hidden;
+  }
+  
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #222;
+  }
+  
+  .noteLabel {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 2.4rem;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 6px rgba(0,0,0,0.9);
+    pointer-events: none;
+    z-index: 2;
+  }
+  
+  .stringRow::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: #555;
+  }
+  
+  .stringRow:last-child::after {
+    display: none;
+  }
+  
+  #settingsPage {
+    padding: 1rem;
+    overflow-y: auto;
+  }
+  
+  .sliderGroup {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #1a1a1a;
+    border-radius: 8px;
+  }
+  
+  .sliderGroup label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #ccc;
+    font-size: 0.9rem;
+  }
+  
+  .sliderValue {
+    float: right;
+    color: #30d158;
+    font-weight: bold;
+  }
+  
+  .sliderGroup input[type="range"] {
+    width: 100%;
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+  
+  .sliderGroup input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #30d158;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  
+  .sliderGroup input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #30d158;
+    cursor: pointer;
+    border-radius: 50%;
+    border: none;
+  }
 </style>
 </head>
 <body>
-<div id="tunerContainer"></div>
+
+<div id="debug">
+  Status: <span id="status">Initializing...</span><br>
+  RMS: <span id="rms">0</span><br>
+  Freq: <span id="freq">-</span><br>
+  Corr: <span id="corr">-</span>
+</div>
+
+<div id="volumeIndicator">
+  <div id="volumeDot"></div>
+</div>
+
+<div id="app">
+  <div class="tabs">
+    <button class="tab active" data-page="tunerPage">Tuner</button>
+    <button class="tab" data-page="settingsPage">Settings</button>
+  </div>
+  
+  <div id="tunerPage" class="page active">
+    <div id="tunerContainer"></div>
+  </div>
+  
+  <div id="settingsPage" class="page">
+    <div id="settingsContainer"></div>
+  </div>
+</div>
+
 <script>
-/*============== GLOBAL DSP CONFIG =================*/
+/* =========================================================================
+   CONFIGURATION
+   ========================================================================= */
+
 const DSP_CONFIG = {
-  DISPLAY_CENTS   : 100,          // ±1 semitone shown
-  COLS            : 35,           // horizontal resolution
-  ROWS            : 30,           // vertical history length
-  UPDATE_INTERVAL : 100,          // ms between analyses
-  HP_CUT          : 70,           // 15% below lowest note (E2)
-  LP_CUT          : 600,          // 80% above highest note (E4)
-  BAND_Q          : 0.707,
-  FFT_SIZE        : 8192,
-  CORRELATION_MIN : 0.50,
-  CORRELATION_SMOOTH_ALPHA : 0.60,
-  SMOOTH_ALPHA_OLD : 0.85,
-  OTHER_DIM_FACTOR : 0.50,
-  PITCH_HISTORY_LENGTH : 5,
+  DISPLAY_CENTS: 80,
+  COLS: 41,
+  ROWS: 20,
+  UPDATE_INTERVAL: 100,
+  HP_CUT: 60,
+  LP_CUT: 800,
+  BAND_Q: 0.707,
+  FFT_SIZE: 8192,
+  RMS_THRESHOLD: 0.003,
+  CORRELATION_MIN: 0.85,
+  SMOOTH_NEW: 0.4,
+  SECOND_HARM_WEIGHT: 0.3,
+  OTHER_DIM_FACTOR: 0.5,
+  PITCH_HISTORY_LENGTH: 5
 };
 
-/*============== GUITAR NOTES (standard tuning) ===============*/
 const STRINGS = [
-  {name:'E2', freq: 82.41},
-  {name:'A2', freq:110.00},
-  {name:'D3', freq:146.83},
-  {name:'G3', freq:196.00},
-  {name:'B3', freq:246.94},
-  {name:'E4', freq:329.63}
+  { name: 'E2', freq: 82.41 },
+  { name: 'A2', freq: 110.00 },
+  { name: 'D3', freq: 146.83 },
+  { name: 'G3', freq: 196.00 },
+  { name: 'B3', freq: 246.94 },
+  { name: 'E4', freq: 329.63 }
 ];
 
-/*============== UI – canvas + overlay label per string ===============*/
-const container   = document.getElementById('tunerContainer');
-const canvases    = [];
-const noteLabels  = [];
+/* =========================================================================
+   UI SETUP
+   ========================================================================= */
+
+const tunerContainer = document.getElementById('tunerContainer');
+const canvases = [];
+
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
-  row.innerHTML = `
-    <canvas></canvas>
-    <div class="noteLabel">${s.name}</div>
-  `;
-  container.appendChild(row);
+  row.innerHTML = `<canvas></canvas><div class="noteLabel">${s.name}</div>`;
+  tunerContainer.appendChild(row);
   canvases.push(row.querySelector('canvas'));
-  noteLabels.push(row.querySelector('.noteLabel'));
 });
 
-/*============== AUDIO PIPELINE =================*/
-let audioCtx, analyser, source, hp, lp, preEmphasis;
-let lastUpdate = performance.now();
+/* =========================================================================
+   AUDIO
+   ========================================================================= */
+
+let audioCtx, analyser, source, hp, lp;
+let lastUpdate = 0;
 let rafId = null;
-
-/* histories[string][row] → {col, hue, light, alpha} or null */
-const histories = STRINGS.map(()=>Array(DSP_CONFIG.ROWS).fill(null));
-
-/* exponential smoothing of the correlation (colour/brightness) */
+let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
 let smoothedCorrelation = null;
-
-/* short‑term pitch history – used for median filter */
 let pitchHistory = [];
+let lastActiveIdx = -1;
+let currentRMS = 0;  // Track RMS for volume indicator
 
-/*============== START – request mic, build graph, start loop ===============*/
-async function startTuner(){
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+async function startTuner() {
+  try {
+    document.getElementById('status').textContent = 'Requesting mic...';
+    
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    });
+    
+    document.getElementById('status').textContent = 'Building audio graph...';
+    
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
+    
     hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = DSP_CONFIG.HP_CUT;
@@ -114,268 +299,370 @@ async function startTuner(){
     lp.frequency.value = DSP_CONFIG.LP_CUT;
     lp.Q.value = DSP_CONFIG.BAND_Q;
 
-    preEmphasis = audioCtx.createBiquadFilter();
-    preEmphasis.type = 'highshelf';
-    preEmphasis.frequency.value = 1000;
-    preEmphasis.gain.value = 6;   // +6 dB
-
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0;   // we do our own smoothing
+    analyser.smoothingTimeConstant = 0;
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
     hp.connect(lp);
-    lp.connect(preEmphasis);
-    preEmphasis.connect(analyser);
+    lp.connect(analyser);
 
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
 
+    document.getElementById('status').textContent = 'Running!';
+    
     resizeCanvases();
-    rafId = requestAnimationFrame(mainLoop);
-  }catch(e){
-    alert('Erreur d’accès au micro :\n'+e);
+    mainLoop();
+  } catch (e) {
+    document.getElementById('status').textContent = 'ERROR: ' + e.message;
+    alert('Mic error: ' + e.message);
   }
 }
 
-/*============== Resize canvases ===============*/
-function resizeCanvases(){
-  const rows = document.querySelectorAll('.stringRow');
-  rows.forEach(row => {
-    const canvas = row.querySelector('canvas');
-    canvas.width  = row.clientWidth;
+function resizeCanvases() {
+  canvases.forEach(canvas => {
+    const row = canvas.parentElement;
+    canvas.width = row.clientWidth;
     canvas.height = row.clientHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#222';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
   });
 }
+
 window.addEventListener('resize', resizeCanvases);
 
-/*============== AUTOCORRELATION =================*/
-function autoCorrelate(buf, sampleRate){
+/* =========================================================================
+   PITCH DETECTION
+   ========================================================================= */
+
+function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
-  const MAX  = Math.floor(SIZE/2);
-  let rms = 0;
-  for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
-  rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return null;               // signal too quiet
+  const MAX_SAMPLES = Math.floor(SIZE / 2);
 
-  let bestOffset = -1, bestCorr = 0, lastCorr = 1;
-  for(let offset=0; offset<MAX; offset++){
-    let corr = 0;
-    if(offset + MAX > buf.length) break;
-    for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
-    corr = 1 - (corr / MAX);
-    if(corr > 0.9 && corr > lastCorr){
-      if(corr > bestCorr){ bestCorr = corr; bestOffset = offset; }
-    }
-    lastCorr = corr;
+  // Calculate RMS
+  let sum = 0;
+  for (let i = 0; i < SIZE; i++) {
+    sum += buf[i] * buf[i];
   }
-  if(bestOffset === -1) return null;
+  const rms = Math.sqrt(sum / SIZE);
+  
+  // Store for volume indicator
+  currentRMS = rms;
+  
+  // Update debug display
+  document.getElementById('rms').textContent = rms.toFixed(4);
+  
+  if (rms < DSP_CONFIG.RMS_THRESHOLD) {
+    return null;
+  }
 
-  const left   = bestOffset>0 ? 1-Math.abs(corrAt(buf,bestOffset-1)) : 0;
-  const centre = 1-Math.abs(corrAt(buf,bestOffset));
-  const right  = (bestOffset+1<MAX) ? 1-Math.abs(corrAt(buf,bestOffset+1)) : 0;
-  const denom = left-2*centre+right;
-  let delta = 0;
-  if(denom !== 0) delta = 0.5*(left-right)/denom;
-  const refined = bestOffset + delta;
-  const pitch = sampleRate / refined;
-  return {freq:pitch, correlation:bestCorr, rms};
-}
-function corrAt(buf, offset){
-  const MAX = Math.floor(buf.length/2);
-  let corr = 0;
-  for(let i=0;i<MAX;i++) corr += Math.abs(buf[i] - buf[i+offset]);
-  return corr / MAX;
+  // Find best correlation
+  let bestOffset = -1;
+  let bestCorr = 0;
+
+  for (let offset = 1; offset < MAX_SAMPLES; offset++) {
+    let sum = 0;
+    for (let i = 0; i < MAX_SAMPLES; i++) {
+      sum += Math.abs(buf[i] - buf[i + offset]);
+    }
+    let corr = 1 - (sum / MAX_SAMPLES);
+    
+    if (corr > DSP_CONFIG.CORRELATION_MIN && corr > bestCorr) {
+      bestCorr = corr;
+      bestOffset = offset;
+    }
+  }
+
+  if (bestOffset < 1) {
+    return null;
+  }
+
+  // Simple interpolation
+  let pitch = sampleRate / bestOffset;
+  
+  // Update debug
+  document.getElementById('freq').textContent = pitch.toFixed(1);
+  document.getElementById('corr').textContent = bestCorr.toFixed(2);
+
+  return { freq: pitch, correlation: bestCorr };
 }
 
-/*============== HELPERS (colour, conversion, etc.) ===============*/
-function hueFromCents(c){
+/* =========================================================================
+   HELPERS
+   ========================================================================= */
+
+function median(arr) {
+  if (!arr.length) return 0;
+  const s = arr.slice().sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+function hueFromCents(c) {
   const max = DSP_CONFIG.DISPLAY_CENTS;
   const lim = Math.max(-max, Math.min(max, c));
   return lim < 0 ? 120 * (1 + lim / max) : 120 + 120 * (lim / max);
 }
-function lightnessFromCorr(c){ return 10 + 80 * c; }   // 10 % → 90 %
-function alphaFromCorr(c){ return c; }
-function centsToCol(cents){
-  const step = (2*DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS-1);
+
+function lightnessFromCorr(c) {
+  return 10 + 80 * c;
+}
+
+function centsToCol(cents) {
+  const step = (2 * DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS - 1);
   let col = Math.round((cents + DSP_CONFIG.DISPLAY_CENTS) / step);
-  if(col < 0) col = 0;
-  if(col >= DSP_CONFIG.COLS) col = DSP_CONFIG.COLS-1;
-  return col;
+  return Math.max(0, Math.min(DSP_CONFIG.COLS - 1, col));
 }
-function centsToX(cents, canvas){
-  const half = canvas.width/2;
+
+function centsToX(cents, canvas) {
+  const half = canvas.width / 2;
   const pxPerCent = half / DSP_CONFIG.DISPLAY_CENTS;
-  let x = Math.round(half + cents * pxPerCent);
-  if(x < 0) x = 0;
-  if(x >= canvas.width) x = canvas.width-1;
-  return x;
+  return Math.max(0, Math.min(canvas.width - 1, Math.round(half + cents * pxPerCent)));
 }
 
-/*============== MEDIAN utility ===============*/
-function median(arr){
-  const sorted = arr.slice().sort((a,b)=>a-b);
-  const mid = Math.floor(sorted.length/2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
-}
+/* =========================================================================
+   MAIN LOOP
+   ========================================================================= */
 
-/*============== NOTE‑NAME FROM FREQUENCY ===============*/
-function noteNameFromFreq(freq){
-  const noteNames = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
-  const midi = Math.round(69 + 12 * Math.log2(freq/440));
-  const noteIndex = (midi % 12 + 12) % 12;
-  const octave    = Math.floor(midi / 12) - 1;
-  return noteNames[noteIndex] + octave;
-}
-
-/*============== MAIN LOOP ===============*/
-let lastActiveIdx = -1;          // which string is currently “active”
-function mainLoop(timestamp){
-  // -------------------------------------------------
-  // 1️⃣ Run heavy analysis only every UPDATE_INTERVAL ms.
-  // -------------------------------------------------
-  if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
+function mainLoop() {
+  const now = performance.now();
+  
+  if (now - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL) {
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
+    
+    const rawInfo = autoCorrelate(buf, audioCtx.sampleRate);
 
-    // ---- RMS (kept only because autoCorrelate needs it) ----
-    let sum = 0;
-    for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
-    const rms = Math.sqrt(sum / buf.length);
-
-    // ---- pitch detection ----
-    const rawInfo = autoCorrelate(buf, audioCtx.sampleRate); // {freq, correlation, rms} or null
-
-    // ---- keep short‑term history for median filter ----
     pitchHistory.push(rawInfo);
-    if (pitchHistory.length > DSP_CONFIG.PITCH_HISTORY_LENGTH) pitchHistory.shift();
+    if (pitchHistory.length > DSP_CONFIG.PITCH_HISTORY_LENGTH) {
+      pitchHistory.shift();
+    }
 
-    // ---- median filter ----
-    const valid = pitchHistory.filter(v=>v!==null);
+    const valid = pitchHistory.filter(v => v !== null);
     let robustInfo = null;
-    if (valid.length){
-      const freqs = valid.map(v=>v.freq);
-      const cors  = valid.map(v=>v.correlation);
-      const medianFreq = median(freqs);
-      const medianCorr = median(cors);
-      if (medianCorr >= DSP_CONFIG.CORRELATION_MIN){
-        robustInfo = {freq:medianFreq, correlation:medianCorr};
+    
+    if (valid.length >= 2) {
+      const freqs = valid.map(v => v.freq);
+      const cors = valid.map(v => v.correlation);
+      robustInfo = { 
+        freq: median(freqs), 
+        correlation: median(cors) 
+      };
+    }
+
+    if (robustInfo) {
+      if (smoothedCorrelation === null) {
+        smoothedCorrelation = robustInfo.correlation;
+      } else {
+        smoothedCorrelation = (1 - DSP_CONFIG.SMOOTH_NEW) * smoothedCorrelation + 
+                            DSP_CONFIG.SMOOTH_NEW * robustInfo.correlation;
+      }
+    } else {
+      if (smoothedCorrelation !== null) {
+        smoothedCorrelation *= 0.9;
       }
     }
 
-    // ---- smooth correlation (colour intensity) ----
-    if (robustInfo){
-      if (smoothedCorrelation===null) smoothedCorrelation = robustInfo.correlation;
-      else{
-        const newA = DSP_CONFIG.CORRELATION_SMOOTH_ALPHA;
-        const oldA = 1 - newA;
-        smoothedCorrelation = oldA*smoothedCorrelation + newA*robustInfo.correlation;
-      }
-    }else{
-      if (smoothedCorrelation!==null) smoothedCorrelation *= DSP_CONFIG.SMOOTH_ALPHA_OLD;
-    }
-
-    // ---- decide which string is “active” ----
     let activeIdx = -1;
     let minAbs = Infinity;
     const centsArray = new Array(STRINGS.length).fill(null);
-    if (robustInfo){
-      const {freq} = robustInfo;
-      STRINGS.forEach((s,i)=>{
-        const cents = 1200 * Math.log2(freq / s.freq);
+    
+    if (robustInfo) {
+      STRINGS.forEach((s, i) => {
+        const cents = 1200 * Math.log2(robustInfo.freq / s.freq);
         centsArray[i] = cents;
         const abs = Math.abs(cents);
-        if (abs < minAbs){
+        if (abs < minAbs) {
           minAbs = abs;
           activeIdx = i;
         }
       });
-      if (minAbs > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
+      
+      if (minAbs > DSP_CONFIG.DISPLAY_CENTS) {
+        activeIdx = -1;
+      }
     }
+    
     lastActiveIdx = activeIdx;
 
-    // ---- update the overlay labels (right side) ----
-    const brightGreen = '#00ff00';
-    STRINGS.forEach((s, idx)=>{
-      if (idx===activeIdx && robustInfo){
-        const noteName = noteNameFromFreq(robustInfo.freq);
-        noteLabels[idx].textContent = noteName;
-        noteLabels[idx].style.color = brightGreen;
-      }else{
-        noteLabels[idx].textContent = s.name;
-        noteLabels[idx].style.color = '#fff';
-      }
-    });
-
-    // ---- push a new waterfall row for each string ----
     STRINGS.forEach((s, idx) => {
       let entry = null;
-      if (robustInfo){
+      
+      if (robustInfo && smoothedCorrelation) {
         const cents = centsArray[idx];
-        const col   = centsToCol(cents);
-        const hue   = hueFromCents(cents);
-        const baseL = lightnessFromCorr(smoothedCorrelation);
-        const baseA = alphaFromCorr(smoothedCorrelation);
-        const light = (activeIdx===idx) ? baseL : baseL * DSP_CONFIG.OTHER_DIM_FACTOR;
-        const alpha  = (activeIdx===idx) ? baseA : baseA * DSP_CONFIG.OTHER_DIM_FACTOR;
-        entry = {col, hue, light, alpha};
+        const col = centsToCol(cents);
+        const hue = hueFromCents(cents);
+        const baseLight = lightnessFromCorr(smoothedCorrelation);
+        const baseAlpha = smoothedCorrelation;
+        
+        const light = (activeIdx === idx) ? baseLight : baseLight * DSP_CONFIG.OTHER_DIM_FACTOR;
+        const alpha = (activeIdx === idx) ? baseAlpha : baseAlpha * DSP_CONFIG.OTHER_DIM_FACTOR;
+        
+        entry = { col, hue, light, alpha };
       }
+      
       histories[idx].push(entry);
-      if (histories[idx].length > DSP_CONFIG.ROWS) histories[idx].shift();
+      if (histories[idx].length > DSP_CONFIG.ROWS) {
+        histories[idx].shift();
+      }
     });
 
-    lastUpdate = timestamp;
+    lastUpdate = now;
   }
 
-  // -------------------------------------------------
-  // 2️⃣ Draw the waterfall visualisation (centre note removed)
-  // -------------------------------------------------
   drawAllCanvases();
-  rafId = requestAnimationFrame(mainLoop);
+  updateVolumeIndicator();
+  requestAnimationFrame(mainLoop);
 }
 
-/*============== DRAWING ROUTINE ===============*/
-function drawAllCanvases(){
+/* =========================================================================
+   VOLUME INDICATOR
+   ========================================================================= */
+
+function updateVolumeIndicator() {
+  const dot = document.getElementById('volumeDot');
+  if (!dot) return;
+  
+  // Map RMS (0 to ~0.5) to dot size (10px to 70px)
+  // Using exponential scaling for better visual effect
+  const minSize = 10;
+  const maxSize = 70;
+  const normalizedRMS = Math.min(currentRMS / 0.3, 1);  // Cap at 0.3 RMS
+  const size = minSize + (maxSize - minSize) * Math.pow(normalizedRMS, 0.5);
+  
+  dot.style.width = size + 'px';
+  dot.style.height = size + 'px';
+  
+  // Adjust opacity based on volume
+  dot.style.opacity = 0.3 + 0.7 * normalizedRMS;
+}
+
+/* =========================================================================
+   DRAWING
+   ========================================================================= */
+
+function drawAllCanvases() {
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
-    const ctx    = canvas.getContext('2d');
-    const colW   = canvas.width / DSP_CONFIG.COLS;
-    const rowH   = canvas.height / DSP_CONFIG.ROWS;
-
-    // background
+    if (!canvas || canvas.width === 0) return;
+    
+    const ctx = canvas.getContext('2d');
+    const colW = canvas.width / DSP_CONFIG.COLS;
+    const rowH = canvas.height / DSP_CONFIG.ROWS;
+    
     ctx.fillStyle = '#222';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // guide lines (centre green & ±10 cents orange)
-    const centreX = canvas.width/2;
-    const leftX   = centsToX(-10, canvas);
-    const rightX  = centsToX(10,  canvas);
-    ctx.strokeStyle = '#30d158'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(centreX,0); ctx.lineTo(centreX,canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const centreX = canvas.width / 2;
+    const leftX = centsToX(-10, canvas);
+    const rightX = centsToX(10, canvas);
+    
+    ctx.strokeStyle = '#30d158';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(centreX, 0);
+    ctx.lineTo(centreX, canvas.height);
     ctx.stroke();
-    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(leftX,0); ctx.lineTo(leftX,canvas.height);
-    ctx.moveTo(rightX,0); ctx.lineTo(rightX,canvas.height);
+    
+    ctx.strokeStyle = '#ff8800';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftX, 0);
+    ctx.lineTo(leftX, canvas.height);
+    ctx.moveTo(rightX, 0);
+    ctx.lineTo(rightX, canvas.height);
     ctx.stroke();
-
-    // waterfall history (oldest at the top)
-    histories[idx].forEach((entry, rowIdx) => {
+    
+    histories[idx].forEach((entry, rowIdxHist) => {
       if (!entry) return;
-      ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
+      
+      ctx.fillStyle = `hsl(${entry.hue}, 100%, ${entry.light}%)`;
       ctx.globalAlpha = entry.alpha;
-      ctx.fillRect(entry.col * colW, rowIdx * rowH, colW, rowH);
+      const y = rowIdxHist * rowH;
+      ctx.fillRect(entry.col * colW, y, colW, rowH);
     });
-    ctx.globalAlpha = 1;   // reset alpha
-
-    /* ---- NOTE: The large note that used to appear on the centre
-          green line has been removed per your request. ---- */
+    
+    ctx.globalAlpha = 1;
+    
+    if (lastActiveIdx === idx && histories[idx].length) {
+      const latest = histories[idx][histories[idx].length - 1];
+      if (latest) {
+        ctx.fillStyle = `hsl(${latest.hue}, 100%, ${latest.light}%)`;
+        ctx.globalAlpha = latest.alpha;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 3.6rem Arial, Helvetica, sans-serif';
+        ctx.fillText(s.name, canvas.width / 2, canvas.height / 2);
+        ctx.globalAlpha = 1;
+      }
+    }
   });
 }
 
-/*============== AUTO‑START ===============*/
+/* =========================================================================
+   SETTINGS
+   ========================================================================= */
+
+const settingsDiv = document.getElementById('settingsContainer');
+
+const sliderDefs = [
+  {key: 'RMS_THRESHOLD', label: 'RMS threshold', min: 0.001, max: 0.02, step: 0.001},
+  {key: 'CORRELATION_MIN', label: 'Min correlation', min: 0.3, max: 0.95, step: 0.01},
+  {key: 'UPDATE_INTERVAL', label: 'Update interval (ms)', min: 50, max: 500, step: 50},
+  {key: 'HP_CUT', label: 'High-pass (Hz)', min: 30, max: 100, step: 10},
+  {key: 'LP_CUT', label: 'Low-pass (Hz)', min: 400, max: 1200, step: 50},
+  {key: 'OTHER_DIM_FACTOR', label: 'Dim inactive', min: 0, max: 1, step: 0.05}
+];
+
+sliderDefs.forEach(def => {
+  const div = document.createElement('div');
+  div.className = 'sliderGroup';
+  
+  const label = document.createElement('label');
+  label.innerHTML = `${def.label}: <span class="sliderValue" id="val_${def.key}">${DSP_CONFIG[def.key]}</span>`;
+  
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = def.min;
+  input.max = def.max;
+  input.step = def.step;
+  input.value = DSP_CONFIG[def.key];
+  
+  input.addEventListener('input', () => {
+    DSP_CONFIG[def.key] = parseFloat(input.value);
+    document.getElementById(`val_${def.key}`).textContent = DSP_CONFIG[def.key];
+    
+    if (def.key === 'HP_CUT' && hp) hp.frequency.value = DSP_CONFIG.HP_CUT;
+    if (def.key === 'LP_CUT' && lp) lp.frequency.value = DSP_CONFIG.LP_CUT;
+  });
+  
+  div.appendChild(label);
+  div.appendChild(input);
+  settingsDiv.appendChild(div);
+});
+
+/* =========================================================================
+   TABS
+   ========================================================================= */
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    const page = tab.dataset.page;
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(page).classList.add('active');
+    
+    if (page === 'tunerPage') resizeCanvases();
+  });
+});
+
+/* =========================================================================
+   START
+   ========================================================================= */
+
 window.addEventListener('load', startTuner);
 </script>
 </body>
