@@ -46,9 +46,9 @@ const DSP_CONFIG = {
   DISPLAY_CENTS   : 100,          // ±1 semitone shown
   COLS            : 35,           // horizontal resolution
   ROWS            : 30,           // vertical history length
-  UPDATE_INTERVAL : 100,          // ms between heavy analyses
-  HP_CUT          : 30,
-  LP_CUT          : 1500,
+  UPDATE_INTERVAL : 100,          // ms between analyses
+  HP_CUT          : 70,           // 15% below lowest note (E2)
+  LP_CUT          : 600,          // 80% above highest note (E4)
   BAND_Q          : 0.707,
   FFT_SIZE        : 16384,
   CORRELATION_MIN : 0.05,
