@@ -133,57 +133,64 @@ window.addEventListener('resize', resizeCanvases);
 /*============== AUTOCORRELATION (SIMPLIFIED) =================*/
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
-  
+
+  // Apply a Hanning window to reduce spectral leakage
+  const windowedBuf = new Float32Array(SIZE);
+  for (let i = 0; i < SIZE; i++) {
+    const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / SIZE));
+    windowedBuf[i] = buf[i] * window;
+  }
+
   // RMS check
   let sumSq = 0;
-  for (let i = 0; i < SIZE; i++) sumSq += buf[i] * buf[i];
+  for (let i = 0; i < SIZE; i++) sumSq += windowedBuf[i] * windowedBuf[i];
   const rms = Math.sqrt(sumSq / SIZE);
   if (rms < DSP_CONFIG.RMS_THRESHOLD) return null;
-  
+
   // Search range for guitar frequencies
   const minLag = Math.floor(sampleRate / DSP_CONFIG.MAX_FREQ);
   const maxLag = Math.floor(sampleRate / DSP_CONFIG.MIN_FREQ);
-  
+
   let bestLag = -1;
   let bestCorr = -1;
-  
-  // Standard autocorrelation
+
+  // Standard autocorrelation with Hanning window
   for (let lag = minLag; lag <= maxLag; lag++) {
     let num = 0;   // numerator
     let den1 = 0;  // denominator part 1
     let den2 = 0;  // denominator part 2
-    
+
     for (let i = 0; i < SIZE - lag; i++) {
-      num += buf[i] * buf[i + lag];
-      den1 += buf[i] * buf[i];
-      den2 += buf[i + lag] * buf[i + lag];
+      num += windowedBuf[i] * windowedBuf[i + lag];
+      den1 += windowedBuf[i] * windowedBuf[i];
+      den2 += windowedBuf[i + lag] * windowedBuf[i + lag];
     }
-    
+
     const denom = Math.sqrt(den1 * den2);
     if (denom === 0) continue;
-    
+
     const corr = num / denom;
     if (corr > bestCorr) {
       bestCorr = corr;
       bestLag = lag;
     }
   }
-  
+
   if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) return null;
-  
+
   // Simple parabolic interpolation
   if (bestLag > minLag && bestLag < maxLag) {
-    const y1 = autocorrAt(buf, bestLag - 1);
+    const y1 = autocorrAt(windowedBuf, bestLag - 1);
     const y2 = bestCorr;
-    const y3 = autocorrAt(buf, bestLag + 1);
-    
+    const y3 = autocorrAt(windowedBuf, bestLag + 1);
+
     const d = (y1 - 2*y2 + y3);
     if (d !== 0) {
       const delta = (y1 - y3) / (2 * d);
       if (Math.abs(delta) < 1) bestLag += delta;
     }
   }
-  
+
   return {
     freq: sampleRate / bestLag,
     correlation: bestCorr,
