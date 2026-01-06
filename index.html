@@ -47,14 +47,14 @@ const DSP_CONFIG = {
   COLS            : 35,
   ROWS            : 30,
   UPDATE_INTERVAL : 100,
-  FFT_SIZE        : 8192,
-  HP_CUT          : 50,   // Reduced to capture lower frequencies better
-  LP_CUT          : 1000, // Increased to capture higher frequencies better
+  FFT_SIZE        : 16384,  // Augmenté pour une meilleure résolution en fréquence
+  HP_CUT          : 50,
+  LP_CUT          : 1200,   // Augmenté pour inclure E4 sans atténuation
   BAND_Q          : 0.707,
-  RMS_THRESHOLD   : 0.005, // Lowered to be more sensitive
-  CORRELATION_MIN : 0.4,   // Lowered to be less strict
-  MIN_FREQ        : 50,    // Reduced to capture lower frequencies
-  MAX_FREQ        : 1000   // Increased to capture higher frequencies
+  RMS_THRESHOLD   : 0.001,  // Réduit pour une meilleure sensibilité
+  CORRELATION_MIN : 0.2,    // Réduit pour une meilleure sensibilité
+  MIN_FREQ        : 50,
+  MAX_FREQ        : 1200    // Augmenté pour inclure E4
 };
 
 /*============== GUITAR STRINGS =================*/
@@ -105,7 +105,7 @@ async function startTuner(){
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0.5; // Increased for smoother transitions
+    analyser.smoothingTimeConstant = 0.6; // Augmenté pour des transitions plus douces
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -134,31 +134,31 @@ window.addEventListener('resize', resizeCanvases);
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
 
-  // Apply a Hanning window to reduce spectral leakage
+  // Appliquer une fenêtre de Hanning pour réduire les fuites spectrales
   const windowedBuf = new Float32Array(SIZE);
   for (let i = 0; i < SIZE; i++) {
     const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / SIZE));
     windowedBuf[i] = buf[i] * window;
   }
 
-  // RMS check
+  // Vérification RMS
   let sumSq = 0;
   for (let i = 0; i < SIZE; i++) sumSq += windowedBuf[i] * windowedBuf[i];
   const rms = Math.sqrt(sumSq / SIZE);
   if (rms < DSP_CONFIG.RMS_THRESHOLD) return null;
 
-  // Search range for guitar frequencies
+  // Plage de recherche pour les fréquences de guitare
   const minLag = Math.floor(sampleRate / DSP_CONFIG.MAX_FREQ);
   const maxLag = Math.floor(sampleRate / DSP_CONFIG.MIN_FREQ);
 
   let bestLag = -1;
   let bestCorr = -1;
 
-  // Enhanced autocorrelation with Hanning window
+  // Autocorrélation améliorée avec fenêtre de Hanning
   for (let lag = minLag; lag <= maxLag; lag++) {
-    let num = 0;   // numerator
-    let den1 = 0;  // denominator part 1
-    let den2 = 0;  // denominator part 2
+    let num = 0;   // numérateur
+    let den1 = 0;  // partie 1 du dénominateur
+    let den2 = 0;  // partie 2 du dénominateur
 
     for (let i = 0; i < SIZE - lag; i++) {
       num += windowedBuf[i] * windowedBuf[i + lag];
@@ -178,7 +178,7 @@ function autoCorrelate(buf, sampleRate) {
 
   if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) return null;
 
-  // Enhanced parabolic interpolation
+  // Interpolation parabolique améliorée
   if (bestLag > minLag && bestLag < maxLag) {
     const y1 = autocorrAt(windowedBuf, bestLag - 1);
     const y2 = bestCorr;
@@ -242,9 +242,10 @@ function mainLoop(timestamp){
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
 
+    // Utiliser une fenêtre plus longue pour la détection du pitch
     const detection = autoCorrelate(buf, audioCtx.sampleRate);
 
-    // Find closest string
+    // Trouver la corde la plus proche
     let activeIdx = -1;
     let minCents = Infinity;
     const centsArray = [];
@@ -260,12 +261,18 @@ function mainLoop(timestamp){
         }
       });
 
+      // Vérification spécifique pour E4
+      const e4Cents = 1200 * Math.log2(detection.freq / 329.63);
+      if (Math.abs(e4Cents) < 20) { // Si la détection est proche de E4
+        activeIdx = 5; // Index de E4 dans STRINGS
+      }
+
       if (minCents > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
     }
 
     lastActiveIdx = activeIdx;
 
-    // Update labels
+    // Mettre à jour les étiquettes
     STRINGS.forEach((s, idx) => {
       if (idx === activeIdx && detection) {
         noteLabels[idx].textContent = noteNameFromFreq(detection.freq);
@@ -276,7 +283,7 @@ function mainLoop(timestamp){
       }
     });
 
-    // Update history
+    // Mettre à jour l'historique
     STRINGS.forEach((s, idx) => {
       let entry = null;
       if (detection) {
@@ -312,7 +319,7 @@ function draw(){
     ctx.fillStyle = '#222';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Guide lines
+    // Lignes de guide
     const centreX = canvas.width/2;
     const leftX = centsToX(-10, canvas);
     const rightX = centsToX(10, canvas);
