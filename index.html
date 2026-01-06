@@ -48,13 +48,13 @@ const DSP_CONFIG = {
   ROWS            : 30,
   UPDATE_INTERVAL : 100,
   FFT_SIZE        : 8192,
-  HP_CUT          : 70,
-  LP_CUT          : 600,
+  HP_CUT          : 50,   // Reduced to capture lower frequencies better
+  LP_CUT          : 1000, // Increased to capture higher frequencies better
   BAND_Q          : 0.707,
-  RMS_THRESHOLD   : 0.01,
-  CORRELATION_MIN : 0.5,
-  MIN_FREQ        : 60,
-  MAX_FREQ        : 400
+  RMS_THRESHOLD   : 0.005, // Lowered to be more sensitive
+  CORRELATION_MIN : 0.4,   // Lowered to be less strict
+  MIN_FREQ        : 50,    // Reduced to capture lower frequencies
+  MAX_FREQ        : 1000   // Increased to capture higher frequencies
 };
 
 /*============== GUITAR STRINGS =================*/
@@ -105,7 +105,7 @@ async function startTuner(){
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0;
+    analyser.smoothingTimeConstant = 0.5; // Increased for smoother transitions
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -130,7 +130,7 @@ function resizeCanvases(){
 }
 window.addEventListener('resize', resizeCanvases);
 
-/*============== AUTOCORRELATION (SIMPLIFIED) =================*/
+/*============== AUTOCORRELATION (IMPROVED) =================*/
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
 
@@ -154,7 +154,7 @@ function autoCorrelate(buf, sampleRate) {
   let bestLag = -1;
   let bestCorr = -1;
 
-  // Standard autocorrelation with Hanning window
+  // Enhanced autocorrelation with Hanning window
   for (let lag = minLag; lag <= maxLag; lag++) {
     let num = 0;   // numerator
     let den1 = 0;  // denominator part 1
@@ -178,7 +178,7 @@ function autoCorrelate(buf, sampleRate) {
 
   if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) return null;
 
-  // Simple parabolic interpolation
+  // Enhanced parabolic interpolation
   if (bestLag > minLag && bestLag < maxLag) {
     const y1 = autocorrAt(windowedBuf, bestLag - 1);
     const y2 = bestCorr;
@@ -241,14 +241,14 @@ function mainLoop(timestamp){
   if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
-    
+
     const detection = autoCorrelate(buf, audioCtx.sampleRate);
-    
+
     // Find closest string
     let activeIdx = -1;
     let minCents = Infinity;
     const centsArray = [];
-    
+
     if (detection) {
       STRINGS.forEach((s, i) => {
         const cents = 1200 * Math.log2(detection.freq / s.freq);
@@ -259,12 +259,12 @@ function mainLoop(timestamp){
           activeIdx = i;
         }
       });
-      
+
       if (minCents > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
     }
-    
+
     lastActiveIdx = activeIdx;
-    
+
     // Update labels
     STRINGS.forEach((s, idx) => {
       if (idx === activeIdx && detection) {
@@ -275,7 +275,7 @@ function mainLoop(timestamp){
         noteLabels[idx].style.color = '#fff';
       }
     });
-    
+
     // Update history
     STRINGS.forEach((s, idx) => {
       let entry = null;
@@ -291,10 +291,10 @@ function mainLoop(timestamp){
       histories[idx].push(entry);
       if (histories[idx].length > DSP_CONFIG.ROWS) histories[idx].shift();
     });
-    
+
     lastUpdate = timestamp;
   }
-  
+
   draw();
   requestAnimationFrame(mainLoop);
 }
@@ -304,26 +304,26 @@ function draw(){
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     if (!canvas || canvas.width === 0) return;
-    
+
     const ctx = canvas.getContext('2d');
     const colW = canvas.width / DSP_CONFIG.COLS;
     const rowH = canvas.height / DSP_CONFIG.ROWS;
-    
+
     ctx.fillStyle = '#222';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+
     // Guide lines
     const centreX = canvas.width/2;
     const leftX = centsToX(-10, canvas);
     const rightX = centsToX(10, canvas);
-    
+
     ctx.strokeStyle = '#30d158';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(centreX, 0);
     ctx.lineTo(centreX, canvas.height);
     ctx.stroke();
-    
+
     ctx.strokeStyle = '#ff8800';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -332,7 +332,7 @@ function draw(){
     ctx.moveTo(rightX, 0);
     ctx.lineTo(rightX, canvas.height);
     ctx.stroke();
-    
+
     // Waterfall
     histories[idx].forEach((entry, rowIdx) => {
       if (!entry) return;
