@@ -2,113 +2,69 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Guitoune: Guitar Tuner</title>
 <style>
-  html, body {
-    margin: 0;
-    height: 100%;
-    overflow: hidden;
-    background: #111;
-    color: #eee;
-    font-family: Arial, Helvetica, sans-serif;
+  html,body{
+    margin:0; height:100%; overflow:hidden;
+    background:#111; color:#eee;
+    font-family:Arial,Helvetica,sans-serif;
   }
-  
-  .stringRow {
-    position: relative;
-    width: 100%;
-    height: calc(100vh / 6);
-    overflow: hidden;
+  .stringRow{
+    position:relative;
+    width:100%;
+    height:calc(100vh/6);
+    overflow:hidden;
   }
-  
-  canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-    background: #222;
+  canvas{
+    display:block;
+    width:100%; height:100%;
+    background:#222;
   }
-  
-  .noteLabel {
-    position: absolute;
-    right: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 2.4rem;
-    font-weight: bold;
-    color: #fff;
-    text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
-    pointer-events: none;
-    z-index: 2;
+  .noteLabel{
+    position:absolute;
+    right:0.5rem;
+    top:50%; transform:translateY(-50%);
+    font-size:2.4rem; font-weight:bold;
+    color:#fff;
+    text-shadow:0 0 6px rgba(0,0,0,0.9);
+    pointer-events:none; z-index:2;
   }
-  
-  .stringRow::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 2px;
-    background: #555;
-    display: none;
+  .stringRow::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:0; height:2px;
+    background:#555; display:none;
   }
-  
-  .stringRow:not(:last-child)::after {
-    display: block;
-  }
+  .stringRow:not(:last-child)::after{display:block;}
 </style>
 </head>
 <body>
 <div id="tunerContainer"></div>
 <script>
-/* =========================================================================
-   GUITOUNE - GUITAR TUNER WITH OPTIMIZED PITCH DETECTION
-   =========================================================================
-   Final release version with:
-   - Correct normalized autocorrelation
-   - Optimized parameters for guitar tuning
-   - Temporal fading for better visual feedback
-   ========================================================================= */
-
-/*============== CONFIGURATION =================*/
+/*============== CONFIG =================*/
 const DSP_CONFIG = {
-  // Visual settings
-  DISPLAY_CENTS: 100,           // ±100 cents (±1 semitone) displayed
-  COLS: 35,                     // Horizontal resolution (waterfall columns)
-  ROWS: 30,                     // Vertical history depth (waterfall rows)
-  
-  // Timing
-  UPDATE_INTERVAL: 100,         // Analysis rate: 10 Hz (100ms between updates)
-  
-  // FFT settings
-  FFT_SIZE: 16384,              // Large window for better low-frequency resolution
-                                // At 44.1kHz: ~371ms window, good for E2 (82Hz)
-  
-  // Audio filtering (band-pass for guitar fundamentals)
-  HP_CUT: 70,                   // High-pass: remove rumble below 70Hz
-  LP_CUT: 400,                  // Low-pass: focus on fundamentals, reject harmonics
-  BAND_Q: 0.707,                // Butterworth response (maximally flat)
-  
-  // Detection thresholds
-  RMS_THRESHOLD: 0.005,         // Minimum signal level (adjusted for sensitivity)
-  CORRELATION_MIN: 0.4,         // Minimum correlation to accept detection
-  
-  // Frequency range (optimized for guitar)
-  MIN_FREQ: 75,                 // Just below E2 (82.41 Hz)
-  MAX_FREQ: 350,                // Just above E4 (329.63 Hz)
-  
-  // Temporal fading
-  FADE_FACTOR: 0.92,            // Fade rate per frame (0.92 = 8% fade per 100ms)
-  MIN_ALPHA: 0.15               // Minimum opacity before clearing
+  DISPLAY_CENTS   : 100,
+  COLS            : 35,
+  ROWS            : 30,
+  UPDATE_INTERVAL : 100,
+  FFT_SIZE        : 8192,
+  HP_CUT          : 50,   // Reduced to capture lower frequencies better
+  LP_CUT          : 1000, // Increased to capture higher frequencies better
+  BAND_Q          : 0.707,
+  RMS_THRESHOLD   : 0.005, // Lowered to be more sensitive
+  CORRELATION_MIN : 0.4,   // Lowered to be less strict
+  MIN_FREQ        : 50,    // Reduced to capture lower frequencies
+  MAX_FREQ        : 1000   // Increased to capture higher frequencies
 };
 
-/*============== GUITAR STRINGS (Standard Tuning) =================*/
+/*============== GUITAR STRINGS =================*/
 const STRINGS = [
-  { name: 'E2', freq: 82.41 },   // Low E (6th string)
-  { name: 'A2', freq: 110.00 },  // A (5th string)
-  { name: 'D3', freq: 146.83 },  // D (4th string)
-  { name: 'G3', freq: 196.00 },  // G (3rd string)
-  { name: 'B3', freq: 246.94 },  // B (2nd string)
-  { name: 'E4', freq: 329.63 }   // High E (1st string)
+  {name:'E2', freq: 82.41},
+  {name:'A2', freq:110.00},
+  {name:'D3', freq:146.83},
+  {name:'G3', freq:196.00},
+  {name:'B3', freq:246.94},
+  {name:'E4', freq:329.63}
 ];
 
 /*============== UI SETUP =================*/
@@ -119,154 +75,119 @@ const noteLabels = [];
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
-  row.innerHTML = `
-    <canvas></canvas>
-    <div class="noteLabel">${s.name}</div>
-  `;
+  row.innerHTML = `<canvas></canvas><div class="noteLabel">${s.name}</div>`;
   container.appendChild(row);
   canvases.push(row.querySelector('canvas'));
   noteLabels.push(row.querySelector('.noteLabel'));
 });
 
-/*============== AUDIO PIPELINE =================*/
+/*============== AUDIO =================*/
 let audioCtx, analyser, source, hp, lp;
 let lastUpdate = 0;
 let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
 let lastActiveIdx = -1;
 
-/*============== AUDIO INITIALIZATION =================*/
-async function startTuner() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      }
-    });
-    
+/*============== START =================*/
+async function startTuner(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    // High-pass filter (remove low-frequency rumble)
     hp = audioCtx.createBiquadFilter();
     hp.type = 'highpass';
     hp.frequency.value = DSP_CONFIG.HP_CUT;
     hp.Q.value = DSP_CONFIG.BAND_Q;
 
-    // Low-pass filter (focus on fundamentals)
     lp = audioCtx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = DSP_CONFIG.LP_CUT;
     lp.Q.value = DSP_CONFIG.BAND_Q;
 
-    // Analyser for time-domain pitch detection
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0;  // No built-in smoothing
+    analyser.smoothingTimeConstant = 0.5; // Increased for smoother transitions
 
-    // Connect audio graph: source → HP → LP → analyser
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
     hp.connect(lp);
     lp.connect(analyser);
 
-    if (audioCtx.state === 'suspended') {
-      await audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     resizeCanvases();
     requestAnimationFrame(mainLoop);
-  } catch (e) {
-    alert('Erreur d\'accès au microphone:\n' + e.message);
+  }catch(e){
+    alert('Micro error: ' + e);
   }
 }
 
-/*============== CANVAS MANAGEMENT =================*/
-function resizeCanvases() {
+function resizeCanvases(){
   canvases.forEach(canvas => {
     const row = canvas.parentElement;
     canvas.width = row.clientWidth;
     canvas.height = row.clientHeight;
   });
 }
-
 window.addEventListener('resize', resizeCanvases);
 
-/*============== PITCH DETECTION: NORMALIZED AUTOCORRELATION =================*/
-/**
- * Detects pitch using normalized autocorrelation with Hann window.
- * Formula: r[lag] = Σ(x[n]·x[n+lag]) / √(Σx[n]² · Σx[n+lag]²)
- * 
- * @param {Float32Array} buf - Time-domain audio buffer
- * @param {number} sampleRate - Audio sample rate (Hz)
- * @returns {Object|null} - {freq, correlation, rms} or null if no pitch detected
- */
+/*============== AUTOCORRELATION (IMPROVED) =================*/
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
 
-  // Apply Hann window to reduce spectral leakage
+  // Apply a Hanning window to reduce spectral leakage
   const windowedBuf = new Float32Array(SIZE);
   for (let i = 0; i < SIZE; i++) {
     const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / SIZE));
     windowedBuf[i] = buf[i] * window;
   }
 
-  // Calculate RMS for silence detection
+  // RMS check
   let sumSq = 0;
-  for (let i = 0; i < SIZE; i++) {
-    sumSq += windowedBuf[i] * windowedBuf[i];
-  }
+  for (let i = 0; i < SIZE; i++) sumSq += windowedBuf[i] * windowedBuf[i];
   const rms = Math.sqrt(sumSq / SIZE);
-  
   if (rms < DSP_CONFIG.RMS_THRESHOLD) return null;
 
-  // Define search range based on guitar frequency limits
+  // Search range for guitar frequencies
   const minLag = Math.floor(sampleRate / DSP_CONFIG.MAX_FREQ);
   const maxLag = Math.floor(sampleRate / DSP_CONFIG.MIN_FREQ);
 
   let bestLag = -1;
   let bestCorr = -1;
 
-  // Compute normalized autocorrelation for each lag
+  // Enhanced autocorrelation with Hanning window
   for (let lag = minLag; lag <= maxLag; lag++) {
-    let numerator = 0;      // Σ(x[n] · x[n+lag])
-    let denominator1 = 0;   // Σ(x[n]²)
-    let denominator2 = 0;   // Σ(x[n+lag]²)
+    let num = 0;   // numerator
+    let den1 = 0;  // denominator part 1
+    let den2 = 0;  // denominator part 2
 
     for (let i = 0; i < SIZE - lag; i++) {
-      numerator += windowedBuf[i] * windowedBuf[i + lag];
-      denominator1 += windowedBuf[i] * windowedBuf[i];
-      denominator2 += windowedBuf[i + lag] * windowedBuf[i + lag];
+      num += windowedBuf[i] * windowedBuf[i + lag];
+      den1 += windowedBuf[i] * windowedBuf[i];
+      den2 += windowedBuf[i + lag] * windowedBuf[i + lag];
     }
 
-    const denominator = Math.sqrt(denominator1 * denominator2);
-    if (denominator === 0) continue;
+    const denom = Math.sqrt(den1 * den2);
+    if (denom === 0) continue;
 
-    const correlation = numerator / denominator;
-    
-    if (correlation > bestCorr) {
-      bestCorr = correlation;
+    const corr = num / denom;
+    if (corr > bestCorr) {
+      bestCorr = corr;
       bestLag = lag;
     }
   }
 
-  // Reject if correlation too weak
-  if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) {
-    return null;
-  }
+  if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) return null;
 
-  // Parabolic interpolation for sub-sample precision
+  // Enhanced parabolic interpolation
   if (bestLag > minLag && bestLag < maxLag) {
     const y1 = autocorrAt(windowedBuf, bestLag - 1);
     const y2 = bestCorr;
     const y3 = autocorrAt(windowedBuf, bestLag + 1);
 
-    const denominator = (y1 - 2 * y2 + y3);
-    if (denominator !== 0) {
-      const delta = (y1 - y3) / (2 * denominator);
-      if (Math.abs(delta) < 1) {
-        bestLag += delta;
-      }
+    const d = (y1 - 2*y2 + y3);
+    if (d !== 0) {
+      const delta = (y1 - y3) / (2 * d);
+      if (Math.abs(delta) < 1) bestLag += delta;
     }
   }
 
@@ -277,9 +198,6 @@ function autoCorrelate(buf, sampleRate) {
   };
 }
 
-/**
- * Helper: Calculate correlation at a specific lag
- */
 function autocorrAt(buf, lag) {
   let num = 0, den1 = 0, den2 = 0;
   for (let i = 0; i < buf.length - lag; i++) {
@@ -291,55 +209,36 @@ function autocorrAt(buf, lag) {
   return denom === 0 ? 0 : num / denom;
 }
 
-/*============== HELPER FUNCTIONS =================*/
-
-/**
- * Convert cents deviation to HSL hue (color)
- * -100 cents (flat) → red (0°)
- * 0 cents (in tune) → green (120°)
- * +100 cents (sharp) → blue (240°)
- */
-function hueFromCents(cents) {
+/*============== HELPERS =================*/
+function hueFromCents(c){
   const max = DSP_CONFIG.DISPLAY_CENTS;
-  const limited = Math.max(-max, Math.min(max, cents));
-  return limited < 0 
-    ? 120 * (1 + limited / max)      // Flat: red → green
-    : 120 + 120 * (limited / max);   // Sharp: green → blue
+  const lim = Math.max(-max, Math.min(max, c));
+  return lim < 0 ? 120 * (1 + lim/max) : 120 + 120 * (lim/max);
 }
 
-/**
- * Convert cents to waterfall column index
- */
-function centsToCol(cents) {
-  const step = (2 * DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS - 1);
+function centsToCol(cents){
+  const step = (2*DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS-1);
   let col = Math.round((cents + DSP_CONFIG.DISPLAY_CENTS) / step);
-  return Math.max(0, Math.min(DSP_CONFIG.COLS - 1, col));
+  return Math.max(0, Math.min(DSP_CONFIG.COLS-1, col));
 }
 
-/**
- * Convert cents to canvas X coordinate
- */
-function centsToX(cents, canvas) {
-  const half = canvas.width / 2;
+function centsToX(cents, canvas){
+  const half = canvas.width/2;
   const pxPerCent = half / DSP_CONFIG.DISPLAY_CENTS;
-  return Math.max(0, Math.min(canvas.width - 1, Math.round(half + cents * pxPerCent)));
+  return Math.max(0, Math.min(canvas.width-1, Math.round(half + cents*pxPerCent)));
 }
 
-/**
- * Convert frequency to note name (e.g., "A4", "C♯3")
- */
-function noteNameFromFreq(freq) {
-  const noteNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-  const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+function noteNameFromFreq(freq){
+  const noteNames = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const midi = Math.round(69 + 12 * Math.log2(freq/440));
   const noteIndex = (midi % 12 + 12) % 12;
   const octave = Math.floor(midi / 12) - 1;
   return noteNames[noteIndex] + octave;
 }
 
 /*============== MAIN LOOP =================*/
-function mainLoop(timestamp) {
-  // Run pitch detection every UPDATE_INTERVAL ms
-  if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL) {
+function mainLoop(timestamp){
+  if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
 
@@ -361,15 +260,12 @@ function mainLoop(timestamp) {
         }
       });
 
-      // Only accept if within display range
-      if (minCents > DSP_CONFIG.DISPLAY_CENTS) {
-        activeIdx = -1;
-      }
+      if (minCents > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
     }
 
     lastActiveIdx = activeIdx;
 
-    // Update note labels
+    // Update labels
     STRINGS.forEach((s, idx) => {
       if (idx === activeIdx && detection) {
         noteLabels[idx].textContent = noteNameFromFreq(detection.freq);
@@ -380,52 +276,31 @@ function mainLoop(timestamp) {
       }
     });
 
-    // Update waterfall history with NEW detection
+    // Update history
     STRINGS.forEach((s, idx) => {
       let entry = null;
-      
       if (detection) {
         const cents = centsArray[idx];
         const col = centsToCol(cents);
         const hue = hueFromCents(cents);
-        const correlation = detection.correlation;
-        const lightness = 10 + 80 * correlation;  // 10-90% based on confidence
-        const alpha = activeIdx === idx ? correlation : correlation * 0.5;
-        
-        entry = { col, hue, lightness, alpha };
+        const corr = detection.correlation;
+        const light = 10 + 80 * corr;
+        const alpha = activeIdx === idx ? corr : corr * 0.5;
+        entry = {col, hue, light, alpha};
       }
-      
-      // Push new entry
       histories[idx].push(entry);
-      if (histories[idx].length > DSP_CONFIG.ROWS) {
-        histories[idx].shift();
-      }
+      if (histories[idx].length > DSP_CONFIG.ROWS) histories[idx].shift();
     });
 
     lastUpdate = timestamp;
   }
 
-  // Apply temporal fading to ALL history entries
-  STRINGS.forEach((s, idx) => {
-    histories[idx].forEach((entry, rowIdx) => {
-      if (entry) {
-        // Fade alpha over time
-        entry.alpha *= DSP_CONFIG.FADE_FACTOR;
-        
-        // Clear entries that have faded too much
-        if (entry.alpha < DSP_CONFIG.MIN_ALPHA) {
-          histories[idx][rowIdx] = null;
-        }
-      }
-    });
-  });
-
   draw();
   requestAnimationFrame(mainLoop);
 }
 
-/*============== RENDERING =================*/
-function draw() {
+/*============== DRAW =================*/
+function draw(){
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     if (!canvas || canvas.width === 0) return;
@@ -434,16 +309,14 @@ function draw() {
     const colW = canvas.width / DSP_CONFIG.COLS;
     const rowH = canvas.height / DSP_CONFIG.ROWS;
 
-    // Clear background
     ctx.fillStyle = '#222';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw guide lines
-    const centreX = canvas.width / 2;
+    // Guide lines
+    const centreX = canvas.width/2;
     const leftX = centsToX(-10, canvas);
     const rightX = centsToX(10, canvas);
 
-    // Center line (perfect tune) - green
     ctx.strokeStyle = '#30d158';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -451,7 +324,6 @@ function draw() {
     ctx.lineTo(centreX, canvas.height);
     ctx.stroke();
 
-    // ±10 cents lines - orange
     ctx.strokeStyle = '#ff8800';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -461,20 +333,18 @@ function draw() {
     ctx.lineTo(rightX, canvas.height);
     ctx.stroke();
 
-    // Draw waterfall with fading trail
+    // Waterfall
     histories[idx].forEach((entry, rowIdx) => {
       if (!entry) return;
-      
-      ctx.fillStyle = `hsl(${entry.hue}, 100%, ${entry.lightness}%)`;
+      ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
       ctx.globalAlpha = entry.alpha;
       ctx.fillRect(entry.col * colW, rowIdx * rowH, colW, rowH);
     });
-    
     ctx.globalAlpha = 1;
   });
 }
 
-/*============== AUTO-START =================*/
+/*============== START =================*/
 window.addEventListener('load', startTuner);
 </script>
 </body>

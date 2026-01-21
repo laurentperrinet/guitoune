@@ -95,7 +95,7 @@ Pourquoi installer une application quand on peut le faire en ligne ?
 
 ## Mode d'emploi
 
-1. Ouvrez la page [https://laurentperrinet.github.io/guitoune/](https://laurentperrinet.github.io/guitoune/) dans un navigateur (ordinateur ou mobile).
+1. Ouvrez la page https://laurentperrinet.github.io/guitoune/ dans un navigateur (ordinateur ou mobile).
 2. Touchez l'écran (si nécessaire selon le navigateur) pour autoriser l'accès au micro.
 3. Jouez une corde – l'accordeur affiche automatiquement :
    - La fréquence actuelle
