@@ -1,153 +1,166 @@
-# Guitoune: the mobile‑Friendly Guitar Tuner  
+# Guitoune: the Mobile-Friendly Guitar Tuner
 
-(:fr: french below)
+(:fr: French version below)
 
-Why need an app when you can do it online?  
+Why need an app when you can do it online?
+
 <p align="center">
   <img src="logo.svg" alt="Guitoune logo" width="120"/>
 </p>
 
----  
+---
 
-## How to use  
+## How to Use
 
-1. Open https://laurentperrinet.github.io/guitoune/ in a browser (desktop or mobile).  
-2. Tap the screen (if the browser requires a user gesture) – the microphone permission prompt appears.  
-3. Play a string; the tuner will automatically display:  
+1. Open the page https://laurentperrinet.github.io/guitoune/ in a browser (desktop or mobile)
+2. Tap the screen (if required by browser) to allow microphone access
+3. Play a string - the tuner automatically displays:
+   - The current frequency
+   - The closest note
+   - The cent deviation from the target pitch
+   - A real-time waterfall visualization
 
-   * the current frequency,  
-   * the note name,  
-   * the cent offset, and  
-   * a real‑time scrolling graph.  
+4. The display shows ±100 cents (±1 semitone) by default
+5. The vertical bars represent correct tuning in green and  **± 10 cents** in yellow
 
-4. The horizontal axis spans **± DISPLAY_CENTS** cents. With the default `DISPLAY_CENTS = 100` you see **‑100 cents (one semitone flat) on the left** and **+100 cents (one semitone sharp) on the right**.  
-5. The vertical bars at the centre represent **± 10 cents** (green ≤ 1 cent, yellow ≤ 10 cents, red > 10 cents).  
-
----  
+---
 
 ## What it is  
 
 **Guitoune** is a pure‑JavaScript/HTML5 guitar tuner that runs entirely in the browser.  
 
-- **Mobile‑first** – the UI is sized for phones and tablets.  
-- **Zero installation** – just open the page, grant microphone access, and start tuning.  
-- **Signal‑processing chain** –  
+- **Mobile-first design** - Responsive interface for phones and tablets
+- **No installation** - Works directly in your browser
+- **No advertisement** - This is open-source and free to use. You can even propose improvments.
+- **Optimized signal processing**:
+  - Band-pass filter (70Hz-1200Hz) focused on guitar fundamentals
+  - High-pass (70Hz) to remove low-frequency noise
+  - Low-pass (1200Hz) to reduce harmonics
+  - Hanning window for reduced spectral leakage
+- **Advanced pitch detection**:
+  - Normalized autocorrelation with parabolic interpolation
+  - <5 cents typical accuracy
+  - fast updates (100ms updates)
+- **Visual feedback**:
+  - Color-coded waterfall display
+  - Temporal fading for smoother visual transitions
+  - Real-time response with minimal latency
 
-  1. **High‑pass (30 Hz) → Low‑pass (1800 Hz)** creates a band‑pass that isolates the useful part of a guitar’s spectrum (≈70 Hz – 450 Hz).  
-  2. A **high‑shelf pre‑emphasis** filter boosts the spectrum roughly linearly with frequency, so higher‑pitched notes (B3, E4) are a little louder in the analysis.  
-  3. An **AnalyserNode** (FFT) supplies the time‑domain data for the pitch algorithm.  
+---
 
-- **Pitch detection** – an autocorrelation algorithm with parabolic (sub‑sample) interpolation delivers a frequency estimate with < 5 cents typical error.  
-- **Visual feedback** – a scrolling waterfall shows the deviation from the target pitch in **cents**, colour‑coded (green ≈ ≤ 1 cent, yellow ≈ ≤ 10 cents, red > 10 cents).  
-- **Loudness indicator** – a transparent canvas in the lower‑left corner displays a red disc whose radius follows the RMS level; the disc is drawn at **80 % opacity** and has no border.  
+## Technical Details
 
----  
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| FFT Size | 16384 | Large window for better frequency resolution |
+| Update Rate | 10Hz | 100ms between analyses |
+| Frequency Range | 75-350Hz | Optimized for guitar strings |
+| Band-pass | 70-1200Hz | Isolates guitar fundamentals |
+| RMS Threshold | 0.005 | Minimum signal level |
+| Correlation Threshold | 0.4 | Minimum confidence for detection |
+| Display Range | ±100 cents | One semitone on each side |
+| Visual Resolution | 35 columns × 30 rows | Smooth waterfall display |
 
-## Technical notes  
+---
 
-| Item | Value / Explanation |
-|------|----------------------|
-| **Audio API** | `AudioContext`, two `BiquadFilterNode`s (high‑pass & low‑pass), one `BiquadFilterNode` (high‑shelf pre‑emphasis), and an `AnalyserNode`. |
-| **FFT size** | `32768` samples (≈ 680 ms at a 48 kHz sample‑rate). This gives a frequency bin spacing of ~0.75 Hz, which produces a very smooth waterfall. If you run on a low‑power device you can change `FFT_SIZE` back to `16384` (≈ 340 ms) to save CPU. |
-| **Update interval** | The heavy pitch analysis runs every **100 ms** (`UPDATE_INTERVAL = 100`). |
-| **Band‑pass limits** | `HP_CUT = 30 Hz`, `LP_CUT = 1800 Hz`. The low‑pass cutoff is high enough to keep the fundamentals of B3 (≈ 247 Hz) and E4 (≈ 330 Hz). |
-| **Correlation smoothing** | `CORRELATION_SMOOTH_ALPHA = 0.2` (slow colour fading) and `SMOOTH_ALPHA_OLD = 0.8` (slow decay when no pitch is found). |
-| **Pitch history** | `PITCH_HISTORY_LENGTH = 20`. The median filter works on the last 20 raw detections, which reduces outliers and makes the waterfall trajectory smoother. |
-| **Display resolution** | `COLS = 51` (≈ 4 cents per column) and `ROWS = 30` (more vertical granularity). |
-| **Correlation threshold** | `CORRELATION_MIN = 0.05`. A lower threshold keeps the graph from “dropping out” on weak notes. |
-| **Other‑string dimming** | `OTHER_DIM_FACTOR = 0.3` – non‑active strings are dimmed to 30 % of the active colour, reducing visual contrast. |
-| **Auto‑start** | The script attempts to start the tuner on page load; if the browser blocks it, the permission dialog appears after the first user tap. |
-
----  
-
-## Why the name?  
+## About the Name
 
 In Québécois slang, *guitoune* is a colloquial, slightly dated synonym for **cigarette**, sometimes humorously repurposed for a small guitar or any random “thing”. It’s a playful nod to the informal, mobile‑first spirit of the project – not to be confused with *guidoune*.  
 
----  
+---
 
-## Contributing  
+## Contributing
 
-Feel free to fork the repository, open issues, or submit pull requests. 
+Contributions are welcome! Feel free to:
+- Fork the repository
+- Open issues for bugs/features
+- Submit pull requests
 
----  
+---
 
-## License  
+## License
 
-[GPLv3 License](LICENSE) – see the `LICENSE` file for details.
+[GPLv3 License](LICENSE) – see the `LICENSE` file for details. US citizens supporting MAGA must be accompanied by an adult.
 
----  
----  
 
-# Guitoune : l’accordeur de guitare mobile‑friendly  
+# Guitoune : l'accordeur de guitare compatible mobile
 
-Pourquoi installer une application alors que l’on peut le faire en ligne ?  
+Pourquoi installer une application quand on peut le faire en ligne ?
 
----  
+<p align="center">
+  <img src="logo.svg" alt="Logo Guitoune" width="120"/>
+</p>
 
-## Qu’est‑ce que c’est  
+---
 
-**Guitoune** est un accordeur de guitare 100 % JavaScript/HTML5 qui fonctionne entièrement dans le navigateur.  
+## Mode d'emploi
 
-- **Mobile‑first** – l’interface est conçue pour les téléphones et les tablettes.  
-- **Aucune installation** – ouvrez simplement la page, autorisez l’accès au micro et commencez à accorder.  
-- **Chaîne de traitement du signal** –  
+1. Ouvrez la page [https://laurentperrinet.github.io/guitoune/](https://laurentperrinet.github.io/guitoune/) dans un navigateur (ordinateur ou mobile).
+2. Touchez l'écran (si nécessaire selon le navigateur) pour autoriser l'accès au micro.
+3. Jouez une corde – l'accordeur affiche automatiquement :
+   - La fréquence actuelle
+   - La note la plus proche
+   - L'écart en cents par rapport à la hauteur cible
+   - Une visualisation en cascade en temps réel.
 
-  1. **High‑pass (30 Hz) → Low‑pass (1800 Hz)** forme un filtre passe‑bande qui isole la partie utile du spectre d’une guitare (≈ 70 Hz – 450 Hz).  
-  2. Un filtre **high‑shelf de pré‑accentuation** augmente le spectre de façon à peu près linéaire avec la fréquence, ce qui rend les notes plus aigües (B3, E4) légèrement plus fortes pour l’analyse.  
-  3. Un **AnalyserNode** (FFT) fournit les données temporelles nécessaires à l’algorithme de détection.  
+4. L'affichage montre par défaut ±100 cents (±1 demi-ton).
+5. Les barres verticales indiquent un accord correct en vert et **±10 cents** en jaune.
 
-- **Détection de hauteur** – autocorrélation avec interpolation parabolique (sous‑échantillonnage) qui donne une précision typique < 5 cents.  
-- **Retour visuel** – une « waterfall » défilante montre l’écart par rapport à la note cible en **cents**, colorée : vert ≈ ≤ 1 cent, jaune ≈ ≤ 10 cents, rouge > 10 cents.  
-- **Indicateur de volume** – un canevas transparent en bas à gauche affiche un disque rouge dont le rayon suit le niveau RMS ; le disque est dessiné avec **80 % d’opacité** et n’a aucun contour.  
+---
 
----  
+## Qu'est-ce que c'est ?
 
-## Comment l’utiliser  
+**Guitoune** est un accordeur de guitare en JavaScript/HTML5 pur, fonctionnant entièrement dans le navigateur.
 
-1. Ouvrez https://laurentperrinet.github.io/guitoune/ dans un navigateur (bureau ou mobile).  
-2. Touchez l’écran (si le navigateur exige un geste utilisateur) – la boîte de dialogue de permission du micro apparaît.  
-3. Jouez une corde ; l’accordeur affichera automatiquement :  
+- **Conçu pour le mobile** : Interface adaptée aux téléphones et tablettes.
+- **Aucune installation** : Fonctionne directement dans votre navigateur.
+- **Sans publicité** : Logiciel libre et open source. Vous pouvez même proposer des améliorations.
+- **Traitement du signal optimisé** :
+  - Filtre passe-bande (70 Hz–1200 Hz) centré sur les fondamentales de la guitare.
+  - Passe-haut (70 Hz) pour éliminer les bruits graves.
+  - Passe-bas (1200 Hz) pour réduire les harmoniques.
+  - Fenêtre de Hanning pour limiter les fuites spectrales.
+- **Détection de hauteur avancée** :
+  - Autocorrélation normalisée avec interpolation parabolique.
+  - Précision typique < 5 cents.
+  - Mise à jour rapide (100 ms entre chaque analyse).
+- **Retour visuel** :
+  - Affichage en cascade codé par couleurs.
+  - Estompage temporel pour des transitions visuelles plus fluides.
+  - Réponse en temps réel avec une latence minimale.
 
-   * la fréquence détectée,  
-   * le nom de la note,  
-   * l’écart en cents, et  
-   * le graphique défilant en temps réel.  
+---
 
-4. L’axe horizontal couvre **± DISPLAY_CENTS** cents. Avec la valeur par défaut `DISPLAY_CENTS = 100` vous voyez **‑100 cents (une demi‑tonalité à plat) à gauche** et **+100 cents (une demi‑tonalité à hausse) à droite**.  
-5. Les barres verticales centrales représentent **± 10 cents** (vert ≤ 1 cent, jaune ≤ 10 cents, rouge > 10 cents).  
+## Détails techniques
 
----  
+| Paramètre          | Valeur      | Description                                      |
+|--------------------|-------------|--------------------------------------------------|
+| Taille FFT         | 16384       | Grande fenêtre pour une meilleure résolution fréquentielle. |
+| Fréquence de mise à jour | 10 Hz   | 100 ms entre chaque analyse.                     |
+| Plage de fréquences| 75–350 Hz   | Optimisé pour les cordes de guitare.              |
+| Passe-bande        | 70–1200 Hz  | Isolement des fondamentales de la guitare.       |
+| Seuil RMS          | 0,005       | Niveau minimal du signal.                         |
+| Seuil de corrélation | 0,4       | Confiance minimale pour la détection.            |
+| Plage d'affichage  | ±100 cents  | Un demi-ton de chaque côté.                       |
+| Résolution visuelle| 35×30       | Affichage fluide en cascade.                      |
 
-## Notes techniques  
+---
 
-| Élément | Valeur / Explication |
-|---------|----------------------|
-| **Audio API** | `AudioContext`, deux `BiquadFilterNode` (high‑pass & low‑pass), un `BiquadFilterNode` (high‑shelf de pré‑accentuation) et un `AnalyserNode`. |
-| **Taille de la FFT** | `32768` échantillons (≈ 680 ms à 48 kHz). Cela donne un pas de fréquence d’environ 0,75 Hz, ce qui rend la waterfall très fluide. Sur des appareils peu puissants, on peut repasser à `16384` (≈ 340 ms) pour alléger la charge CPU. |
-| **Intervalle de mise à jour** | L’analyse lourde de hauteur s’exécute toutes les **100 ms** (`UPDATE_INTERVAL = 100`). |
-| **Limites du passe‑bande** | `HP_CUT = 30 Hz`, `LP_CUT = 1800 Hz`. La coupe haute est suffisante pour conserver les fondamentaux de B3 (≈ 247 Hz) et E4 (≈ 330 Hz). |
-| **Lissage de la corrélation** | `CORRELATION_SMOOTH_ALPHA = 0.2` (fading de couleur lent) et `SMOOTH_ALPHA_OLD = 0.8` (dégradation lente lorsqu’aucune hauteur n’est détectée). |
-| **Historique de hauteur** | `PITCH_HISTORY_LENGTH = 20`. Le filtre médian travaille sur les 20 dernières détections brutes, ce qui réduit les valeurs aberrantes et rend la trajectoire de la waterfall plus lisse. |
-| **Résolution d’affichage** | `COLS = 51` (≈ 4 cents par colonne) et `ROWS = 30` (plus de lignes verticales). |
-| **Seuil de corrélation** | `CORRELATION_MIN = 0.05`. Un seuil plus bas évite que le graphique disparaisse sur des notes faibles. |
-| **Atténuation des cordes non actives** | `OTHER_DIM_FACTOR = 0.3` – les cordes qui ne sont pas la corde active sont atténuées à 30 % de la couleur active, ce qui diminue le contraste visuel. |
-| **Démarrage automatique** | Le script tente de lancer l’accordeur au chargement de la page ; si le navigateur bloque l’opération, la boîte de dialogue apparaît après le premier tap. |
+## À propos du nom
 
----  
+En québécois, *guitoune* est un synonyme familier et un peu désuet de **cigarette**, parfois réutilisé humoristiquement pour désigner une petite guitare ou un objet quelconque. C'est un clin d'œil ludique à l'esprit informel et mobile du projet.
 
-## Pourquoi ce nom ?  
+---
 
-En québécois, *guitoune* est un synonyme familier (et légèrement vieilli) de **cigarette**, parfois détourné humoristiquement pour désigner une petite guitare ou n’importe quel « truc ». C’est un clin d’œil ludique à l’esprit informel et mobile‑first du projet – à ne pas confondre avec *guidoune*.  
+## Contribuer
 
----  
+Les contributions sont les bienvenues ! N'hésitez pas à :
+- Forker le dépôt.
+- Ouvrir des *issues* pour signaler des bugs ou proposer des fonctionnalités.
+- Soumettre des *pull requests*.
 
-## Contribuer  
+---
 
-N’hésitez pas à forker le dépôt, ouvrir des issues ou soumettre des pull‑requests. 
+## Licence
 
----  
-
-## Licence  
-
-[GPLv3 License](LICENSE) – voir le fichier `LICENSE` pour les détails.
+[Licence GPLv3](LICENSE) – Voir le fichier `LICENSE` pour plus de détails.
