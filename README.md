@@ -1,6 +1,6 @@
 # Guitoune: the Mobile-Friendly Guitar Tuner
 
-(:fr: French version below)
+( :fr: French version below)
 
 Why need an app when you can do it online?
 
@@ -13,15 +13,14 @@ Why need an app when you can do it online?
 ## How to Use
 
 1. Open the page https://laurentperrinet.github.io/guitoune/ in a browser (desktop or mobile)
-2. Tap the screen (if required by browser) to allow microphone access
-3. Play a string - the tuner automatically displays:
-   - The current frequency
-   - The closest note
-   - The cent deviation from the target pitch
-   - A real-time waterfall visualization
+2. Allow microphone access
+3. Play a string - the tuner automatically displays as a real-time waterfall visualization:
+   - The closest note in one of the 6 blocks ordered from top to bottom E2, A2, D3, G3, B3 and E4
+   - The current frequency relative to that note
+   - The vertical bars represent correct tuning in green and incorrect**± 10 cents** in yellow
 
-4. The display shows ±100 cents (±1 semitone) by default
-5. The vertical bars represent correct tuning in green and  **± 10 cents** in yellow
+
+![howto](guitoune_howto.jpg)
 
 ---
 
@@ -46,9 +45,7 @@ Why need an app when you can do it online?
   - Temporal fading for smoother visual transitions
   - Real-time response with minimal latency
 
----
-
-## Technical Details
+### Technical Details
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
@@ -83,84 +80,88 @@ Contributions are welcome! Feel free to:
 [GPLv3 License](LICENSE) – see the `LICENSE` file for details. US citizens supporting MAGA must be accompanied by an adult.
 
 
-# Guitoune : l'accordeur de guitare compatible mobile
+---
+---
+---
 
-Pourquoi installer une application quand on peut le faire en ligne ?
+# Guitoune : l’accordeur de guitare adapté aux mobiles
+
+( :en: Version anglaise ci‑dessus)
+
+Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 
 <p align="center">
-  <img src="logo.svg" alt="Logo Guitoune" width="120"/>
+  <img src="logo.svg" alt="Logo de Guitoune" width="120"/>
 </p>
 
 ---
 
-## Mode d'emploi
+## Comment l’utiliser
 
-1. Ouvrez la page https://laurentperrinet.github.io/guitoune/ dans un navigateur (ordinateur ou mobile).
-2. Touchez l'écran (si nécessaire selon le navigateur) pour autoriser l'accès au micro.
-3. Jouez une corde – l'accordeur affiche automatiquement :
-   - La fréquence actuelle
-   - La note la plus proche
-   - L'écart en cents par rapport à la hauteur cible
-   - Une visualisation en cascade en temps réel.
+1. Ouvrez la page https://laurentperrinet.github.io/guitoune/ dans un navigateur (ordinateur de bureau ou mobile)  
+2. Autorisez l’accès au microphone  
+3. Jouez une corde – l’accordeur affiche automatiquement une visualisation en cascade en temps réel :
+   - La note la plus proche parmi les 6 blocs, ordonnés de haut en bas : E2, A2, D3, G3, B3 et E4  
+   - La fréquence actuelle relative à cette note  
+   - Les barres verticales montrent l’accord correct en vert et l’accord incorrect **± 10 cents** en jaune  
 
-4. L'affichage montre par défaut ±100 cents (±1 demi-ton).
-5. Les barres verticales indiquent un accord correct en vert et **±10 cents** en jaune.
 
----
-
-## Qu'est-ce que c'est ?
-
-**Guitoune** est un accordeur de guitare en JavaScript/HTML5 pur, fonctionnant entièrement dans le navigateur.
-
-- **Conçu pour le mobile** : Interface adaptée aux téléphones et tablettes.
-- **Aucune installation** : Fonctionne directement dans votre navigateur.
-- **Sans publicité** : Logiciel libre et open source. Vous pouvez même proposer des améliorations.
-- **Traitement du signal optimisé** :
-  - Filtre passe-bande (70 Hz–1200 Hz) centré sur les fondamentales de la guitare.
-  - Passe-haut (70 Hz) pour éliminer les bruits graves.
-  - Passe-bas (1200 Hz) pour réduire les harmoniques.
-  - Fenêtre de Hanning pour limiter les fuites spectrales.
-- **Détection de hauteur avancée** :
-  - Autocorrélation normalisée avec interpolation parabolique.
-  - Précision typique < 5 cents.
-  - Mise à jour rapide (100 ms entre chaque analyse).
-- **Retour visuel** :
-  - Affichage en cascade codé par couleurs.
-  - Estompage temporel pour des transitions visuelles plus fluides.
-  - Réponse en temps réel avec une latence minimale.
+![howto](guitoune_howto.jpg)
 
 ---
 
-## Détails techniques
+## Qu’est‑ce que c’est
 
-| Paramètre          | Valeur      | Description                                      |
-|--------------------|-------------|--------------------------------------------------|
-| Taille FFT         | 16384       | Grande fenêtre pour une meilleure résolution fréquentielle. |
-| Fréquence de mise à jour | 10 Hz   | 100 ms entre chaque analyse.                     |
-| Plage de fréquences| 75–350 Hz   | Optimisé pour les cordes de guitare.              |
-| Passe-bande        | 70–1200 Hz  | Isolement des fondamentales de la guitare.       |
-| Seuil RMS          | 0,005       | Niveau minimal du signal.                         |
-| Seuil de corrélation | 0,4       | Confiance minimale pour la détection.            |
-| Plage d'affichage  | ±100 cents  | Un demi-ton de chaque côté.                       |
-| Résolution visuelle| 35×30       | Affichage fluide en cascade.                      |
+**Guitoune** est un accordeur de guitare pure‑JavaScript/HTML5 qui s’exécute entièrement dans le navigateur.
+
+- **Design mobile‑first** – Interface réactive pour smartphones et tablettes  
+- **Pas d’installation** – Fonctionne directement dans votre navigateur  
+- **Aucune publicité** – Projet open‑source et gratuit. Vous pouvez même proposer des améliorations.  
+- **Traitement du signal optimisé** :
+  - Filtre passe‑bande (70 Hz‑1200 Hz) centré sur les fondamentaux de la guitare  
+  - Filtre passe‑haut (70 Hz) pour éliminer le bruit basse fréquence  
+  - Filtre passe‑bas (1200 Hz) pour réduire les harmoniques  
+  - Fenêtre de Hanning pour diminuer les fuites spectrales  
+- **Détection de hauteur avancée** :
+  - Autocorrélation normalisée avec interpolation parabolique  
+  - Précision typique < 5 cents  
+  - Mises à jour rapides (taux de 100 ms)  
+- **Retour visuel** :
+  - Affichage en cascade coloré  
+  - Atténuation temporelle pour des transitions visuelles plus douces  
+  - Réaction en temps réel avec latence minimale  
+
+### Détails techniques
+
+| Paramètre                | Valeur   | Description                                          |
+|--------------------------|----------|------------------------------------------------------|
+| Taille FFT               | 16384    | Grande fenêtre pour une meilleure résolution en fréquence |
+| Fréquence de mise à jour  | 10 Hz    | 100 ms entre chaque analyse                           |
+| Plage de fréquences      | 75‑350 Hz| Optimisé pour les cordes de guitare                  |
+| Passe‑bande              | 70‑1200 Hz| Isole les fondamentaux de la guitare                 |
+| Seuil RMS                | 0.005    | Niveau de signal minimal                             |
+| Seuil de corrélation     | 0.4      | Confiance minimale pour la détection                |
+| Plage d’affichage        | ±100 cents| Un demi‑ton de chaque côté                           |
+| Résolution visuelle      | 35 colonnes × 30 lignes | Affichage en cascade fluide                     |
 
 ---
 
 ## À propos du nom
 
-En québécois, *guitoune* est un synonyme familier et un peu désuet de **cigarette**, parfois réutilisé humoristiquement pour désigner une petite guitare ou un objet quelconque. C'est un clin d'œil ludique à l'esprit informel et mobile du projet.
+En argot québécois, *guitoune* est un synonyme familier, légèrement désuet de **cigarette**, parfois détourné avec humour pour désigner une petite guitare ou n’importe quel « truc ». C’est un clin d’œil ludique à l’esprit informel, mobile‑first du projet – à ne pas confondre avec *guidoune*.
 
 ---
 
 ## Contribuer
 
-Les contributions sont les bienvenues ! N'hésitez pas à :
-- Forker le dépôt.
-- Ouvrir des *issues* pour signaler des bugs ou proposer des fonctionnalités.
-- Soumettre des *pull requests*.
+Les contributions sont les bienvenues ! N’hésitez pas à :
+
+- Faire un fork du dépôt  
+- Ouvrir des tickets pour les bogues / les fonctionnalités  
+- Soumettre des pull‑requests  
 
 ---
 
 ## Licence
 
-[Licence GPLv3](LICENSE) – Voir le fichier `LICENSE` pour plus de détails.
+[Licence GPLv3](LICENSE) – voir le fichier `LICENSE` pour plus de détails. Les citoyens américains soutenant le MAGA doivent être accompagnés d’un adulte.
