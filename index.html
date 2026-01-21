@@ -2,40 +2,78 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Guitoune: Guitar Tuner</title>
 <style>
-  html,body{
-    margin:0; height:100%; overflow:hidden;
-    background:#111; color:#eee;
-    font-family:Arial,Helvetica,sans-serif;
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    color: #eee;
+    font-family: Arial, Helvetica, sans-serif;
   }
-  .stringRow{
-    position:relative;
-    width:100%;
-    height:calc(100vh/6);
-    overflow:hidden;
+  
+  #tunerContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
   }
-  canvas{
-    display:block;
-    width:100%; height:100%;
-    background:#222;
+  
+  .stringRow {
+    position: relative;
+    flex: 1;
+    min-height: 0; /* Allows flex items to shrink below content size */
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .noteLabel{
-    position:absolute;
-    right:0.5rem;
-    top:50%; transform:translateY(-50%);
-    font-size:2.4rem; font-weight:bold;
-    color:#fff;
-    text-shadow:0 0 6px rgba(0,0,0,0.9);
-    pointer-events:none; z-index:2;
+  
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #222;
   }
-  .stringRow::after{
-    content:"";
-    position:absolute;
-    left:0; right:0; bottom:0; height:2px;
-    background:#555; display:none;
+  
+  .noteLabel {
+    position: absolute;
+    right: 0.5rem;
+    font-size: clamp(1.5rem, 4vw, 2.4rem);
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 6px rgba(0,0,0,0.9);
+    pointer-events: none;
+    z-index: 2;
   }
-  .stringRow:not(:last-child)::after{display:block;}
+  
+  .stringRow::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: #555;
+  }
+  
+  .stringRow:last-child::after {
+    display: none;
+  }
+  
+  /* Safe area insets for mobile devices */
+  @supports(padding: max(0px)) {
+    .stringRow:first-child {
+      padding-top: max(12px, env(safe-area-inset-top));
+    }
+    
+    .stringRow:last-child {
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+  }
 </style>
 </head>
 <body>
@@ -48,13 +86,13 @@ const DSP_CONFIG = {
   ROWS            : 30,
   UPDATE_INTERVAL : 100,
   FFT_SIZE        : 8192,
-  HP_CUT          : 50,   // Reduced to capture lower frequencies better
-  LP_CUT          : 1000, // Increased to capture higher frequencies better
+  HP_CUT          : 50,
+  LP_CUT          : 1000,
   BAND_Q          : 0.707,
-  RMS_THRESHOLD   : 0.005, // Lowered to be more sensitive
-  CORRELATION_MIN : 0.4,   // Lowered to be less strict
-  MIN_FREQ        : 50,    // Reduced to capture lower frequencies
-  MAX_FREQ        : 1000   // Increased to capture higher frequencies
+  RMS_THRESHOLD   : 0.005,
+  CORRELATION_MIN : 0.4,
+  MIN_FREQ        : 50,
+  MAX_FREQ        : 1000
 };
 
 /*============== GUITAR STRINGS =================*/
@@ -105,7 +143,7 @@ async function startTuner(){
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0.5; // Increased for smoother transitions
+    analyser.smoothingTimeConstant = 0.5;
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -128,13 +166,20 @@ function resizeCanvases(){
     canvas.height = row.clientHeight;
   });
 }
-window.addEventListener('resize', resizeCanvases);
 
-/*============== AUTOCORRELATION (IMPROVED) =================*/
+// Handle orientation changes and resize events
+function handleResize() {
+  resizeCanvases();
+}
+
+window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', handleResize);
+
+/*============== AUTOCORRELATION =================*/
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
 
-  // Apply a Hanning window to reduce spectral leakage
+  // Apply a Hanning window
   const windowedBuf = new Float32Array(SIZE);
   for (let i = 0; i < SIZE; i++) {
     const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / SIZE));
@@ -154,11 +199,11 @@ function autoCorrelate(buf, sampleRate) {
   let bestLag = -1;
   let bestCorr = -1;
 
-  // Enhanced autocorrelation with Hanning window
+  // Enhanced autocorrelation
   for (let lag = minLag; lag <= maxLag; lag++) {
-    let num = 0;   // numerator
-    let den1 = 0;  // denominator part 1
-    let den2 = 0;  // denominator part 2
+    let num = 0;
+    let den1 = 0;
+    let den2 = 0;
 
     for (let i = 0; i < SIZE - lag; i++) {
       num += windowedBuf[i] * windowedBuf[i + lag];
@@ -178,7 +223,7 @@ function autoCorrelate(buf, sampleRate) {
 
   if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) return null;
 
-  // Enhanced parabolic interpolation
+  // Parabolic interpolation
   if (bestLag > minLag && bestLag < maxLag) {
     const y1 = autocorrAt(windowedBuf, bestLag - 1);
     const y2 = bestCorr;
