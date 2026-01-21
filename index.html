@@ -15,17 +15,21 @@
     font-family: Arial, Helvetica, sans-serif;
   }
   
+  /* Fixed positioning to avoid browser UI interference */
   #tunerContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    width: 100vw;
   }
   
   .stringRow {
     position: relative;
     flex: 1;
-    min-height: 0; /* Allows flex items to shrink below content size */
+    min-height: 0;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -64,7 +68,7 @@
     display: none;
   }
   
-  /* Safe area insets for mobile devices */
+  /* Safe area handling for mobile devices */
   @supports(padding: max(0px)) {
     .stringRow:first-child {
       padding-top: max(12px, env(safe-area-inset-top));
@@ -169,11 +173,13 @@ function resizeCanvases(){
 
 // Handle orientation changes and resize events
 function handleResize() {
-  resizeCanvases();
+  setTimeout(resizeCanvases, 100); // Delay to ensure layout is complete
 }
 
 window.addEventListener('resize', handleResize);
-window.addEventListener('orientationchange', handleResize);
+window.addEventListener('orientationchange', () => {
+  setTimeout(handleResize, 300); // Longer delay for orientation changes
+});
 
 /*============== AUTOCORRELATION =================*/
 function autoCorrelate(buf, sampleRate) {
