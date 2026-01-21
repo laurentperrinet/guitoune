@@ -1,6 +1,6 @@
 # Guitoune: the Mobile-Friendly Guitar Tuner
 
-( :fr: French version below)
+[( :fr: French version below)](#version-française)
 
 Why need an app when you can do it online?
 
@@ -84,9 +84,7 @@ Contributions are welcome! Feel free to:
 ---
 ---
 
-# Guitoune : l’accordeur de guitare adapté aux mobiles
-
-( :en: Version anglaise ci‑dessus)
+# <a name="version-française"></a> Guitoune : l’accordeur de guitare adapté aux mobiles
 
 Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 
