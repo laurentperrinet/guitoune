@@ -15,7 +15,7 @@ Why need an app when you can do it online?
 1. Open the page https://laurentperrinet.github.io/guitoune/ in a browser (desktop or mobile)
 2. Allow microphone access
 3. Play a string - the tuner automatically displays as a real-time waterfall visualization:
-   - The closest note in one of the 6 blocks ordered from top to bottom E2, A2, D3, G3, B3 and E4
+   - The closest note in one of the 6 horizontal blocks ordered from top to bottom E2, A2, D3, G3, B3 and E4
    - The current frequency relative to that note
    - The vertical bars represent correct tuning in green and incorrect**± 10 cents** in yellow
 
