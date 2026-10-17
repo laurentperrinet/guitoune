@@ -5,13 +5,15 @@
  * Bump the date or the counter in CACHE_NAME when the list of files below changes:
  * the old cache is then deleted. */
 
-const CACHE_NAME = 'guitoune-2026-10-17-5';
+const CACHE_NAME = 'guitoune-2026-10-17-6';
 
 const SHELL = [
   './',
   'index.html',
   'pitch.js',
   'guitoune_howto.svg',
+  'guitoune_howto.fr.svg',
+  'guitoune_howto.qc.svg',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/favicon-32.png',

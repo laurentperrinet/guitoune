@@ -1,6 +1,10 @@
-# Guitoune: the Mobile-Friendly Guitar Tuner
+# <a name="english-version"></a> Guitoune: the Mobile-Friendly Guitar Tuner
 
-[( :fr: French version below)](#version-française)
+<p align="center">
+  <a href="#english-version">🇬🇧 English</a> ·
+  <a href="#version-française">🇫🇷 Français</a> ·
+  <a href="#version-québécoise">⚜️ Québécois</a>
+</p>
 
 Why need an app when you can do it online?
 
@@ -40,7 +44,7 @@ Why need an app when you can do it online?
 - **12 tunings on three instruments** - Guitar (standard, drop D, half step down, full step down, DADGAD, open G, open D), bass (4 strings, drop D) and ukulele (standard, low G, baritone)
 - **Adjustable reference pitch** - A4 from 415 Hz to 466 Hz (440 Hz by default)
 - **Two display scales** - ± 50 cents, or ± 15 cents (fine mode) for the last touches
-- **English and French** - follows the language of the browser, or is chosen in the settings
+- **English, French and Québécois** - follows the language of the browser (English or French), or is chosen in the settings; `?lang=en`, `?lang=fr` or `?lang=qc` at the end of the address forces one. The diagram of the help button is translated too
 - **Battery saver** - optional, redraws the display at 30 frames per second instead of every frame
 - **Accessible** - the note and the error are also given as text, and announced to screen readers
 - **Pitch detection**:
@@ -170,6 +174,12 @@ The tests need Node 20 or later and no package: `npm test`. They are run on ever
 
 # <a name="version-française"></a> Guitoune : l’accordeur de guitare adapté aux mobiles
 
+<p align="center">
+  <a href="#english-version">🇬🇧 English</a> ·
+  <a href="#version-française">🇫🇷 Français</a> ·
+  <a href="#version-québécoise">⚜️ Québécois</a>
+</p>
+
 Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 
 <p align="center">
@@ -194,7 +204,7 @@ Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
    - **plein écran** (seulement quand le navigateur le permet).
 5. Facultatif : installez-le depuis le menu du navigateur (« Ajouter à l’écran d’accueil » ou « Installer »). Une fois ouvert, il fonctionne sans connexion.
 
-![howto](guitoune_howto.svg)
+![howto](guitoune_howto.fr.svg)
 
 ---
 
@@ -208,7 +218,7 @@ Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 - **12 accordages sur trois instruments** – Guitare (standard, drop D, un demi‑ton plus bas, un ton plus bas, DADGAD, open G, open D), basse (4 cordes, drop D) et ukulélé (standard, sol grave, baryton)  
 - **Diapason réglable** – A4 de 415 Hz à 466 Hz (440 Hz par défaut)  
 - **Deux échelles d’affichage** – ± 50 cents, ou ± 15 cents (mode fin) pour les derniers réglages  
-- **Anglais et français** – suit la langue du navigateur, ou se choisit dans les réglages  
+- **Anglais, français et québécois** – suit la langue du navigateur (anglais ou français), ou se choisit dans les réglages ; `?lang=en`, `?lang=fr` ou `?lang=qc` au bout de l’adresse en impose une. Le schéma du bouton d’aide est traduit lui aussi  
 - **Économie de batterie** – facultative, redessine l’affichage à 30 images par seconde au lieu de chaque image  
 - **Accessible** – la note et l’écart sont aussi donnés en texte, et annoncés aux lecteurs d’écran  
 - **Détection de hauteur** :
@@ -329,3 +339,101 @@ Les tests demandent Node 20 ou plus et aucun paquet : `npm test`. Ils sont lanc�
 ## Licence
 
 [Licence AGPLv3](LICENSE) – voir le fichier `LICENSE` pour plus de détails. Les citoyens américains soutenant le MAGA doivent être accompagnés d’un adulte.
+
+
+---
+---
+---
+
+# <a name="version-québécoise"></a> Guitoune : l’accordeur de guitare pour ton cell
+
+<p align="center">
+  <a href="#english-version">🇬🇧 English</a> ·
+  <a href="#version-française">🇫🇷 Français</a> ·
+  <a href="#version-québécoise">⚜️ Québécois</a>
+</p>
+
+Pourquoi s’installer une app quand ça se fait directement en ligne ?
+
+<p align="center">
+  <img src="icons/icon.svg" alt="Logo de Guitoune" width="120"/>
+</p>
+
+---
+
+## Comment ça marche
+
+1. Ouvre la page https://laurentperrinet.github.io/guitoune/ dans ton navigateur (ordi ou cell)
+2. Touche **Partir l’accordeur** pis autorise le micro
+3. Pogne une corde. L’accordeur montre une cascade en temps réel, avec une bande par corde (six pour une guitare, de haut en bas : E2, A2, D3, G3, B3 pis E4 en accordage standard) :
+   - La bande de la corde la plus proche affiche la note jouée, en **vert** quand t’es accordé (à **± 10 cents**) pis en **orange** sinon
+   - Sous la note, une ligne te dit dans quel sens tourner la cheville (**↑** monter, **↓** descendre, **✓** t’es bon), l’écart en cents pis la fréquence en Hz
+   - La cascade montre les 3 dernières secondes, la mesure la plus récente en bas. La ligne verte, c’est la hauteur exacte ; les deux lignes orange, c’est ± 10 cents
+4. Les boutons ronds sont empilés en colonne sur le bord gauche, de haut en bas :
+   - **micro** : allume ou éteint le micro, sa couleur suit le niveau du son ;
+   - **réglages** : l’accordage (guitare, basse ou ukulélé), le diapason, l’échelle d’affichage, l’économiseur de batterie pis la langue ;
+   - **thème de couleurs** : passe d’un des cinq thèmes au suivant ;
+   - **aide** (**?**) : affiche le schéma plus bas ;
+   - **plein écran** (juste quand le navigateur le permet).
+5. Facultatif : installe-la depuis le menu du navigateur (« Ajouter à l’écran d’accueil » ou « Installer »). Une fois ouverte, elle marche sans connexion.
+
+![howto](guitoune_howto.qc.svg)
+
+---
+
+## C’est quoi, ça ?
+
+**Guitoune** est un accordeur de guitare en pur JavaScript/HTML5 qui roule au complet dans le navigateur : rien à installer, pas de pub, gratuit pis open source.
+
+- **Pensé pour le cell** – l’interface s’ajuste aux téléphones et aux tablettes
+- **Hors connexion** – une fois la page ouverte, elle peut s’installer pis marcher sans réseau
+- **12 accordages sur trois instruments** – guitare (standard, drop D, un demi-ton plus bas, un ton plus bas, DADGAD, open G, open D), basse (4 cordes, drop D) pis ukulélé (standard, sol grave, baryton)
+- **Diapason ajustable** – A4 de 415 Hz à 466 Hz (440 Hz par défaut)
+- **Deux échelles** – ± 50 cents, ou ± 15 cents (mode fin) pour les derniers tours de cheville
+- **Anglais, français pis québécois** – la langue suit celle du navigateur (anglais ou français) ; pour le québécois, choisis-le dans les réglages ou ajoute `?lang=qc` au bout de l’adresse
+- **Économiseur de batterie** – facultatif, l’affichage se redessine à 30 images par seconde
+- **Accessible** – la note pis l’écart sont aussi donnés en texte, pis annoncés aux lecteurs d’écran
+
+Le modèle mathématique, le tableau des variables pis les mesures de la détection de hauteur sont les mêmes partout : ils sont dans la [version française](#version-française) et dans la [version anglaise](#english-version).
+
+---
+
+## L’histoire du mot *guitoune*
+
+Un accordeur qui s’appelle *Guitoune*, ça se pose des questions. D’où il vient, ce mot-là ? On a fouillé dans les dictionnaires pour te raconter ce qu’on sait pour de vrai, pis ce qu’on ne sait pas encore.
+
+### Un mot venu du Maghreb
+
+Les dictionnaires s’entendent là-dessus : *guitoune* vient de l’arabe maghrébin *gitun* (ou *gayton*), qui veut dire **tente**. Le [CNRTL](https://www.cnrtl.fr/definition/GUITOUNE) et [La langue française](https://www.lalanguefrancaise.com/dictionnaire/definition/guitoune) le rattachent tous les deux à cette racine. Au Maghreb, la lettre arabe ق (le *qāf*) se prononce parfois comme un *g* : c’est ce qui explique qu’un mot qu’on écrit *qaiṭūn* en arabe classique devienne *gitun* dans la bouche des gens de là-bas, pis finalement *guitoune* en français. Selon certaines sources, l’arabe classique lui-même aurait emprunté le mot au grec tardif *koitôn*, « chambre » : une pièce où on dort, c’est pas si loin d’une tente.
+
+### De la tente de l’armée à la tranchée
+
+C’est par l’armée que le mot serait entré en français. Une hypothèse souvent avancée : les troupes françaises stationnées en Algérie l’auraient ramené dans leurs bagages. Les datations varient d’une source à l’autre, mais elles pointent vers le milieu du XIXᵉ siècle, sous le Second Empire. Ce qui est mieux établi, c’est que *guitoune* a fini par appartenir à l’**argot militaire**, pis à l’**argot des poilus** de la Première Guerre mondiale : là, la guitoune, c’est l’abri de tranchée où les soldats se reposent pis se protègent. Pas de luxe : juste de quoi se mettre à l’abri.
+
+### Dans la langue de tous les jours
+
+Avec le temps, le mot est sorti des casernes. Aujourd’hui, les dictionnaires le décrivent comme un mot **familier** : une tente, ou n’importe quel abri temporaire de fortune, souvent précaire pis fabriqué avec ce qui traîne. Une toile tendue entre deux arbres, une cabane bricolée, un campement de fin de semaine : c’est une guitoune.
+
+### Pis chez nous ?
+
+On aimerait te citer ici le *Dictionnaire historique du français québécois* ou Usito. Mais honnêtement : les ouvrages qu’on a pu consulter en ligne (CNRTL, Robert, La langue française) ne donnent aucun emploi propre au Québec, ni le sens de « cigarette » qu’évoque la section « À propos du nom ». Ce qui est sûr, c’est que *guitoune* est un mot du français familier ; son usage québécois reste à documenter. Si tu connais le mot chez vous, avec un sens qui n’est pas dans cette liste, [ouvre un ticket](https://github.com/laurentperrinet/guitoune/issues) : on se ferait un plaisir de l’ajouter ici, avec la source.
+
+### Pourquoi une guitoune pour accorder une guitare ?
+
+D’abord parce que le mot sonne comme une petite guitare : *guit(are)* pis la terminaison familière *-oune*, c’est un jeu de mots tout trouvé. Ensuite parce que l’image colle : une guitoune, c’est un abri de fortune, pis c’est un peu ce que cette app veut être pour ta guitare. Tu rentres avec des cordes qui sonnent faux, tu pognes une corde, tu tournes la cheville jusqu’à ce que la barre verte s’allume, pis tu ressors accordé. Pas d’installation, pas de pub, pas de façon : un abri de fortune qui tient dans la poche.
+
+Pis, pour éviter tout malentendu : ne pas confondre avec *guidoune*, un autre mot bien de chez nous, qui n’a rien à voir avec les tantes. Ni avec les guitares.
+
+Sources : [CNRTL](https://www.cnrtl.fr/definition/GUITOUNE) · [La langue française](https://www.lalanguefrancaise.com/dictionnaire/definition/guitoune) · [Le Robert](https://dictionnaire.lerobert.com/en/definition/guitoune) · [DVLF](https://dvlf.uchicago.edu/mot/guitoune).
+
+---
+
+## Contribuer
+
+Les contributions sont les bienvenues ! Fais un fork du dépôt, ouvre un ticket pour un bogue ou une idée, ou envoie une pull request. Les détails (où est le code, comment l’essayer en local, comment rouler les tests) sont dans la [section française](#version-française) ; les changements sont listés dans [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## Licence
+
+[Licence AGPLv3](LICENSE) – voir le fichier `LICENSE` pour plus de détails.

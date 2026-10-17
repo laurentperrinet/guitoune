@@ -24,10 +24,16 @@ const CONFIG = {...PITCH_CONFIG, ...DSP_CONFIG};
 const TUNINGS = [...page.matchAll(/\{id:'(\w+)',\s*group:'(\w+)',\s*midi:\[([\d,]+)\]\}/g)]
   .map(m => ({id: m[1], group: m[2], midi: m[3].split(',').map(Number)}));
 const THEMES = [...page.match(/const THEMES = \[([\s\S]*?)\];/)[1].matchAll(/\{id:'(\w+)'/g)].map(m => m[1]);
-const I18N = new Function('return ' + page.match(/const I18N = (\{[\s\S]*?\n\});/)[1])();
+// English and French are written out; Québécois is the French dictionary with its own lines (`I18N.qc = ...`)
+const I18N = new Function(page.match(/const I18N = \{[\s\S]*?\n\};/)[0] + '\n' + page.match(/I18N\.qc = \{[\s\S]*?\n\};/)[0] +
+  '\nreturn I18N;')();
+const DIAGRAMS = Object.fromEntries(
+  [...page.match(/const DIAGRAMS = \{([^}]*)\}/)[1].matchAll(/(\w+): '([^']+)'/g)].map(m => [m[1], m[2]]));
 
-// The variables table of each language: rows {names: [`NAME`, ...], value: text of the third column}
-const [english, french] = readme.split('<a name="version-française">');
+// The variables table of each language: rows {names: [`NAME`, ...], value: text of the third column}.
+// The Québécois section has no table: it points to the French one.
+const [english, afterEnglish] = readme.split('<a name="version-française">');
+const [french, quebecois] = afterEnglish.split('<a name="version-québécoise">');
 function variables(text){
   return text.split('\n').filter(line => /^\|.*`/.test(line)).map(line => {
     const cells = line.split('|').map(c => c.trim());
@@ -70,12 +76,31 @@ for (const [language, text] of [['English', english], ['French', french]]){
   });
 }
 
-test('both languages have the same texts, with the same {placeholders}', () => {
-  assert.deepEqual(Object.keys(I18N.fr).sort(), Object.keys(I18N.en).sort());
-  for (const key of Object.keys(I18N.en)){
-    assert.ok(I18N.en[key].trim() && I18N.fr[key].trim(), `${key} is empty`);
-    const names = text => (text.match(/\{\w+\}/g) || []).sort().join();
-    assert.equal(names(I18N.fr[key]), names(I18N.en[key]), `${key}: placeholders differ`);
+test(`README (Québécois): the number of tunings is that of the code`, () => {
+  const count = quebecois.match(/\*\*(\d+) accordages/);
+  assert.ok(count, 'the number of tunings is not announced');
+  assert.equal(Number(count[1]), TUNINGS.length);
+});
+
+test('every language has the same texts as English, with the same {placeholders}', () => {
+  const names = text => (text.match(/\{\w+\}/g) || []).sort().join();
+  for (const language of Object.keys(I18N).filter(l => l !== 'en')){
+    assert.deepEqual(Object.keys(I18N[language]).sort(), Object.keys(I18N.en).sort(), `${language}: keys differ`);
+    for (const key of Object.keys(I18N.en)){
+      assert.ok(I18N.en[key].trim() && I18N[language][key].trim(), `${language}.${key} is empty`);
+      assert.equal(names(I18N[language][key]), names(I18N.en[key]), `${language}.${key}: placeholders differ`);
+    }
+  }
+});
+
+test('the explanation diagram exists in every language, with the same layout and the real number of tunings', () => {
+  assert.deepEqual(Object.keys(DIAGRAMS).sort(), Object.keys(I18N).sort());
+  const layout = svg => ({box: svg.match(/viewBox="([^"]+)"/)[1], texts: (svg.match(/<text\b/g) || []).length});
+  const reference = layout(read(DIAGRAMS.en));
+  for (const [language, file] of Object.entries(DIAGRAMS)){
+    const svg = read(file);
+    assert.deepEqual(layout(svg), reference, `${file} does not have the layout of ${DIAGRAMS.en}`);
+    assert.ok(svg.includes(`(${TUNINGS.length} `), `${file}: the settings caption does not announce ${TUNINGS.length} tunings`);
   }
 });
 
@@ -108,7 +133,7 @@ test('offline cache: every file that the page needs is listed, and exists', () =
   for (const file of shell) assert.ok(existsSync(new URL('../' + file, import.meta.url)), `${file} is in SHELL but missing`);
   const needed = new Set(['index.html', 'manifest.webmanifest', 'sw.js'].filter(f => f !== 'sw.js'));
   for (const m of html.matchAll(/<link [^>]*href="([^"]+)"/g)) needed.add(m[1]);
-  for (const m of html.matchAll(/(?:src|href)="(guitoune_howto\.svg)"/g)) needed.add(m[1]);
+  for (const file of Object.values(DIAGRAMS)) needed.add(file);
   for (const m of page.matchAll(/from '\.\/([\w.-]+)'/g)) needed.add(m[1]);
   for (const icon of manifest.icons) needed.add(icon.src);
   for (const file of needed) assert.ok(shell.includes(file), `${file} is needed by the page but not in SHELL`);

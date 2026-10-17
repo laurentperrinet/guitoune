@@ -559,7 +559,7 @@ const TUNINGS = [
 // localStorage can be missing or throw (private windows, blocked site data):
 // the tuner then simply keeps its defaults.
 const SETTINGS_KEY = 'guitoune.settings';
-const LANGUAGES = ['auto', 'en', 'fr'];   // 'auto' follows the language of the browser
+const LANGUAGES = ['auto', 'en', 'fr', 'qc'];   // 'auto' follows the language of the browser; 'qc' is Québécois
 const settings = {tuning: TUNINGS[0].id, a4: DSP_CONFIG.A4_DEFAULT, fine: false, battery: false, language: 'auto'};
 
 function clampA4(hz){
@@ -609,7 +609,7 @@ applyTuning();
 
 /*============== LANGUAGE =================*/
 // Every text shown to the user is here. {name} marks a value filled in by tr().
-// The note names stay in letters (C D E F G A B) in both languages.
+// The note names stay in letters (C D E F G A B) in every language.
 const I18N = {
   en: {
     title: 'Guitoune: Guitar Tuner',
@@ -657,7 +657,7 @@ const I18N = {
     help: 'Aide', helpOpen: 'Ouvrir l’aide',
     fullscreen: 'Plein écran', fullscreenEnter: 'Passer en plein écran', fullscreenExit: 'Quitter le plein écran',
     helpScroller: 'Schéma de l’accordeur, défile horizontalement',
-    helpImage: 'Schéma de l’accordeur (le texte du schéma est en anglais). La corde détectée est surlignée en vert. Les trois barres verticales marquent moins 10 cents, juste et plus 10 cents. Six flèches relient les lignes E2 à E4 aux six cordes, des graves aux aigus. En dessous, les boutons microphone, réglages, thème de couleurs, aide et plein écran, empilés le long du bord gauche, sont décrits.',
+    helpImage: 'Schéma de l’accordeur. La corde détectée est surlignée en vert. Les trois barres verticales marquent moins 10 cents, juste et plus 10 cents. Six flèches relient les lignes E2 à E4 aux six cordes, des graves aux aigus. En dessous, les boutons microphone, réglages, thème de couleurs, aide et plein écran, empilés le long du bord gauche, sont décrits.',
     helpPrev: 'Faire défiler le schéma vers la gauche', helpNext: 'Faire défiler le schéma vers la droite',
     helpSource: 'Code source et licence (AGPLv3) :', close: 'Fermer',
     tuning: 'Accordage', a4: 'Diapason A4 (Hz)',
@@ -683,7 +683,33 @@ const I18N = {
   }
 };
 
+// Québécois: the French texts, with a light accent where it sounds natural ("partir" for start,
+// "pis", "c’est beau", tutoiement). Only the lines that differ are listed; the others come from `fr`.
+I18N.qc = {
+  ...I18N.fr,
+  start: 'Partir l’accordeur', restart: 'Repartir',
+  micInterrupted: 'Le micro a été coupé. Touche pour repartir.',
+  micOn: 'Allumer le micro', micOff: 'Éteindre le micro', micTitle: 'Micro',
+  themeLabel: 'Thème de couleurs : {theme}. Appuie pour passer au suivant',
+  helpImage: 'Schéma de l’accordeur. La corde captée s’allume en vert. Les trois barres verticales marquent moins 10 cents, pile-poil et plus 10 cents. Six flèches relient les lignes E2 à E4 aux six cordes, du son grave au son aigu. En dessous, les boutons micro, réglages, thème de couleurs, aide et plein écran, empilés le long du bord gauche, sont expliqués.',
+  battery: 'Économiseur de batterie (30 images par seconde)', done: 'C’est beau',
+  micNoApi: 'Ce navigateur peut pas accéder au micro (il faut une page https:// sécurisée).',
+  micDenied: 'L’accès au micro a été refusé. Autorise-le dans les réglages du navigateur, pis réessaye.',
+  micNone: 'Aucun micro n’a été trouvé.',
+  micBusy: 'Le micro est utilisé par une autre application.',
+  micOther: 'Erreur du micro : {message}',
+  announceInTune: '{note}, pile-poil'
+};
+
+// The explanation diagram exists in each language (same layout, translated captions)
+const DIAGRAMS = {en: 'guitoune_howto.svg', fr: 'guitoune_howto.fr.svg', qc: 'guitoune_howto.qc.svg'};
+
+// A link such as ?lang=fr shows that language until the user picks another one in the settings
+let urlLanguage = new URLSearchParams(location.search).get('lang');
+if (!LANGUAGES.includes(urlLanguage) || urlLanguage === 'auto') urlLanguage = null;
+
 function resolveLanguage(){
+  if (urlLanguage) return urlLanguage;
   if (settings.language !== 'auto') return settings.language;
   return (navigator.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
@@ -1025,13 +1051,15 @@ function fillTuningSelect(){
 
 function fillLanguageSelect(){
   languageSelect.replaceChildren(
-    new Option(tr('languageAuto'), 'auto'), new Option('English', 'en'), new Option('Français', 'fr'));
-  languageSelect.value = settings.language;
+    new Option(tr('languageAuto'), 'auto'), new Option('English', 'en'), new Option('Français', 'fr'),
+    new Option('Québécois', 'qc'));
+  languageSelect.value = urlLanguage || settings.language;
 }
 
 function applyLanguage(){
   lang = resolveLanguage();
-  document.documentElement.lang = lang;
+  document.documentElement.lang = lang === 'qc' ? 'fr-CA' : lang;
+  document.getElementById('helpImage').setAttribute('src', DIAGRAMS[lang]);
   document.title = tr('title');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = tr(el.dataset.i18n); });
   for (const [attribute, key] of [['aria-label', 'i18nAriaLabel'], ['title', 'i18nTitle'], ['alt', 'i18nAlt']]){
@@ -1051,7 +1079,7 @@ function syncSettingsControls(){
   a4Input.value = settings.a4;
   fineInput.checked = settings.fine;
   batteryInput.checked = settings.battery;
-  languageSelect.value = settings.language;
+  languageSelect.value = urlLanguage || settings.language;
 }
 
 // Strings and columns change meaning (and the tuning may have another number of strings),
@@ -1088,6 +1116,7 @@ batteryInput.addEventListener('change', () => {
 
 languageSelect.addEventListener('change', () => {
   settings.language = LANGUAGES.includes(languageSelect.value) ? languageSelect.value : 'auto';
+  urlLanguage = null;   // the choice in the settings now wins over ?lang=
   saveSettings();
   applyLanguage();
 });

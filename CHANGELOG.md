@@ -20,7 +20,11 @@ versions was tagged.
 ### Added
 - Bass (4 strings, drop D) and ukulele (standard, low G, baritone) tunings: 12 tunings in all, with a
   variable number of rows.
-- Interface in English and French, chosen from the browser language or in the settings.
+- Interface in English, French and Québécois, chosen from the browser language (English or French) or in
+  the settings; `?lang=en`, `?lang=fr` or `?lang=qc` in the address forces one.
+- The explanation diagram of the help button in French and Québécois (`guitoune_howto.fr.svg`,
+  `guitoune_howto.qc.svg`), shown in the language of the page; flags at the top of the README for the
+  three languages, and a Québécois section with the history of the word *guitoune*.
 - Battery saver in the settings (30 frames per second).
 - Open Graph and Twitter tags, and a Content-Security-Policy.
 - Tests with `node:test` for the detection, the tracker, and the consistency between the code, the
