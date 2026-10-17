@@ -18,10 +18,12 @@ Why need an app when you can do it online?
    - The block of the closest string shows the note being played, in **green** when the string is in tune (within **± 10 cents**) and in **orange** otherwise
    - Under the note, a readout gives the direction to turn the peg (**↑** raise the pitch, **↓** lower it, **✓** in tune), the error in cents and the frequency in Hz
    - The waterfall shows the last 3 seconds, with the newest reading at the bottom. The green vertical line marks the exact pitch and the two orange lines mark ± 10 cents
-4. Use the round buttons in the corners:
-   - **microphone** (top right): switch the microphone on or off, its colour follows the input level;
-   - **full screen** (top left, when the browser allows it);
-   - **settings** (top left, next to it): choose the tuning, the reference pitch and the scale of the display.
+4. Use the round buttons grouped in the top left corner, from left to right:
+   - **microphone**: switch the microphone on or off, its colour follows the input level;
+   - **settings**: choose the tuning, the reference pitch and the scale of the display;
+   - **colour theme**: cycle through the five colour themes;
+   - **help** (**?**): show the diagram below;
+   - **full screen** (only when the browser allows it).
 5. Optional: install it from the browser menu ("Add to Home Screen" or "Install"). Once opened, it works without a network connection.
 
 ![howto](guitoune_howto.svg)
@@ -49,7 +51,7 @@ Why need an app when you can do it online?
   - Error below 2 cents on clean synthetic tones (real strings, with noise and inharmonicity, may do worse)
   - New reading every 100 ms
 - **Visual feedback**:
-  - Colour-coded waterfall display: a glowing gradient ribbon that glides upwards
+  - Colour-coded waterfall display: gradient cells that glide upwards
   - Real-time response with minimal latency
 
 ### The model
@@ -74,7 +76,7 @@ $$\delta=\frac{y_1-y_3}{2\,(y_1-2y_2+y_3)}, \qquad f=\frac{f_s}{\tau^\ast+\delta
 
 $$f_k = f_{A4}\;2^{(m_k-69)/12}, \qquad c_k = 1200\,\log_2\frac{f}{f_k}$$
 
-The played string is the one with the smallest $|c_k|$, provided that $|c_k|\le C_c$. On the waterfall, an error $c$ (limited to $[-C_d,\,C_d]$) is drawn at the horizontal position $x = \dfrac{W}{2}\left(1+\dfrac{c}{C_d}\right)$, where $W$ is the width of the block. Successive readings are joined by a ribbon of width $1.1\,W/N_c$ whose colour is a gradient between their hues, surrounded by a faint halo; the ribbon glides upwards continuously and fades out with age.
+The played string is the one with the smallest $|c_k|$, provided that $|c_k|\le C_c$. On the waterfall, an error $c$ (limited to $[-C_d,\,C_d]$) is drawn at the horizontal position $x = \dfrac{W}{2}\left(1+\dfrac{c}{C_d}\right)$, where $W$ is the width of the block. Each reading is a cell of width $W/N_c$ whose colour is a vertical gradient from the hue of the previous reading to its own; the cells glide upwards continuously and fade out with age.
 
 ### Variables
 
@@ -98,7 +100,7 @@ The values below are those of the code ([index.html](index.html), `DSP_CONFIG` a
 | $C_d$ (fine mode) | `FINE_DISPLAY_CENTS` | 15 cents | Half-width of the waterfall in fine mode |
 | $C_c$ | `CAPTURE_CENTS` | 100 cents | Largest distance at which a string counts as played |
 | $C_t$ | `IN_TUNE_CENTS` | 10 cents | Largest error of a string in tune (green) |
-| $N_c$ | `COLS` | 35 columns | Sets the width of the trace ($1.1\,W/N_c$) |
+| $N_c$ | `COLS` | 35 columns | Sets the width of the trace ($W/N_c$) |
 | $N_r$ | `ROWS` | 30 rows (about 3 s of history) | Number of readings kept in the waterfall |
 | - | `LEVEL_MIN_DB` | -60 dBFS | Input level shown in green on the microphone button |
 | - | `LEVEL_MAX_DB` | -10 dBFS | Input level shown in red on the microphone button |
@@ -152,7 +154,9 @@ Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 4. Utilisez les boutons ronds dans les coins :
    - **microphone** (en haut à droite) : allume ou éteint le microphone, sa couleur suit le niveau d’entrée ;
    - **plein écran** (en haut à gauche, quand le navigateur le permet) ;
-   - **réglages** (en haut à gauche, à côté) : choix de l’accordage, du diapason et de l’échelle d’affichage.
+   - **réglages** (en haut à gauche, à côté) : choix de l’accordage, du diapason et de l’échelle d’affichage ;
+   - **thème de couleurs** (en bas à gauche) : passe d’un des cinq thèmes au suivant ;
+   - **aide** (**?**, en bas à gauche, à côté) : affiche le schéma ci‑dessous.
 5. Facultatif : installez-le depuis le menu du navigateur (« Ajouter à l’écran d’accueil » ou « Installer »). Une fois ouvert, il fonctionne sans connexion.
 
 ![howto](guitoune_howto.svg)
@@ -205,7 +209,7 @@ $$\delta=\frac{y_1-y_3}{2\,(y_1-2y_2+y_3)}, \qquad f=\frac{f_s}{\tau^\ast+\delta
 
 $$f_k = f_{A4}\;2^{(m_k-69)/12}, \qquad c_k = 1200\,\log_2\frac{f}{f_k}$$
 
-La corde jouée est celle de plus petit $|c_k|$, à condition que $|c_k|\le C_c$. Sur la cascade, un écart $c$ (limité à $[-C_d,\,C_d]$) est tracé à la position horizontale $x = \dfrac{W}{2}\left(1+\dfrac{c}{C_d}\right)$, où $W$ est la largeur du bloc. Les mesures successives sont reliées par un ruban de largeur $1{,}1\,W/N_c$, dont la couleur est un dégradé entre leurs teintes, entouré d’un halo discret ; le ruban glisse de façon continue vers le haut et s’estompe avec l’âge.
+La corde jouée est celle de plus petit $|c_k|$, à condition que $|c_k|\le C_c$. Sur la cascade, un écart $c$ (limité à $[-C_d,\,C_d]$) est tracé à la position horizontale $x = \dfrac{W}{2}\left(1+\dfrac{c}{C_d}\right)$, où $W$ est la largeur du bloc. Chaque mesure est une case de largeur $W/N_c$ dont la couleur est un dégradé vertical de la teinte de la mesure précédente à la sienne ; les cases glissent de façon continue vers le haut et s’estompent avec l’âge.
 
 ### Variables
 
@@ -229,7 +233,7 @@ Les valeurs ci‑dessous sont celles du code ([index.html](index.html), `DSP_CON
 | $C_d$ (mode fin) | `FINE_DISPLAY_CENTS` | 15 cents | Demi‑largeur de la cascade en mode fin |
 | $C_c$ | `CAPTURE_CENTS` | 100 cents | Plus grande distance à laquelle une corde est considérée jouée |
 | $C_t$ | `IN_TUNE_CENTS` | 10 cents | Plus grand écart d’une corde accordée (vert) |
-| $N_c$ | `COLS` | 35 colonnes | Fixe la largeur du tracé ($1{,}1\,W/N_c$) |
+| $N_c$ | `COLS` | 35 colonnes | Fixe la largeur du tracé ($W/N_c$) |
 | $N_r$ | `ROWS` | 30 lignes (environ 3 s d’historique) | Nombre de mesures gardées dans la cascade |
 | - | `LEVEL_MIN_DB` | -60 dBFS | Niveau d’entrée affiché en vert sur le bouton microphone |
 | - | `LEVEL_MAX_DB` | -10 dBFS | Niveau d’entrée affiché en rouge sur le bouton microphone |

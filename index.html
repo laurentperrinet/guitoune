@@ -182,14 +182,19 @@
     display: none;
   }
   
-  /* Microphone toggle, floating above the string rows */
-  #micButton {
+  /* All the control buttons sit together in the top left corner, in one row */
+  #controls {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
-    right: max(12px, env(safe-area-inset-right));
+    left: max(12px, env(safe-area-inset-left));
     z-index: 10;
-    width: 48px;
-    height: 48px;
+    display: flex;
+    gap: 8px;
+  }
+
+  #controls button {
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 2px solid var(--border);
     border-radius: 50%;
@@ -202,9 +207,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  #micButton svg {
-    width: 26px;
-    height: 26px;
+  #controls button[hidden] { display: none; }
+
+  #controls svg {
+    width: 24px;
+    height: 24px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -222,113 +229,15 @@
     color: var(--level-colour, var(--accent));
   }
 
-  /* Full screen toggle, mirrors the microphone button on the left */
-  #fullscreenButton {
-    position: fixed;
-    top: max(12px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
-    z-index: 10;
-    width: 48px;
-    height: 48px;
-    padding: 0;
-    border: 2px solid var(--border);
-    border-radius: 50%;
-    background: var(--btn-bg);
-    color: var(--btn-fg);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  #fullscreenButton[hidden] { display: none; }
-
-  #fullscreenButton svg {
-    width: 26px;
-    height: 26px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  /* Corners point outwards to enter, inwards to exit */
+  /* Corners point outwards to enter full screen, inwards to exit */
   #fullscreenButton .fsExit { display: none; }
   #fullscreenButton.active .fsEnter { display: none; }
   #fullscreenButton.active .fsExit { display: block; }
 
-  /* Settings button, next to the full screen one (or in the corner when that one is hidden) */
-  #settingsButton {
-    position: fixed;
-    top: max(12px, env(safe-area-inset-top));
-    left: calc(max(12px, env(safe-area-inset-left)) + 56px);
-    z-index: 11;
-    width: 48px;
-    height: 48px;
-    padding: 0;
-    border: 2px solid var(--border);
-    border-radius: 50%;
-    background: var(--btn-bg);
-    color: var(--btn-fg);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  #fullscreenButton[hidden] ~ #settingsButton {
-    left: max(12px, env(safe-area-inset-left));
-  }
-
-  #settingsButton[hidden] { display: none; }
-
-  #settingsButton svg {
-    width: 26px;
-    height: 26px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-
-  /* Theme switch, bottom left; a little smaller than the other buttons */
-  #themeButton {
-    position: fixed;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    left: max(12px, env(safe-area-inset-left));
-    z-index: 10;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 2px solid var(--border);
-    border-radius: 50%;
-    background: var(--btn-bg);
-    color: var(--btn-fg);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  #themeButton svg {
-    width: 22px;
-    height: 22px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
   #themeButton .themeHalf { fill: currentColor; }
 
-  #settingsDialog {
+  #settingsDialog,
+  #helpDialog {
     box-sizing: border-box;
     width: min(24rem, calc(100vw - 2rem));
     padding: 1.2rem;
@@ -338,9 +247,11 @@
     color: var(--text);
   }
 
-  #settingsDialog::backdrop { background: var(--backdrop); }
+  #settingsDialog::backdrop,
+  #helpDialog::backdrop { background: var(--backdrop); }
 
-  #settingsDialog h2 {
+  #settingsDialog h2,
+  #helpDialog h2 {
     margin: 0 0 1rem;
     font-size: 1.2rem;
   }
@@ -374,7 +285,8 @@
     accent-color: var(--accent);
   }
 
-  #settingsDone {
+  #settingsDone,
+  #helpDone {
     font: inherit;
     font-weight: bold;
     padding: 0.6rem 1.8rem;
@@ -385,16 +297,96 @@
     cursor: pointer;
   }
 
-  /* On short landscape screens, keep the note labels clear of the button */
-  @media (max-height: 500px) {
-    .noteLabel { right: 4.5rem; }
+  /* The diagram is a wide picture: the dialog is wider and scrolls on small screens */
+  #helpDialog {
+    width: min(64rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+  }
+
+  /* The picture is shown at a readable height and scrolls sideways when it is wider than the
+     dialog; the arrows only exist while there is something to see on their side.
+     It has its own white background, whatever the colour theme. */
+  .helpViewer {
+    position: relative;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .helpScroller {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .helpScroller::-webkit-scrollbar { display: none; }
+
+  .helpScroller img {
+    display: block;
+    height: clamp(22rem, calc(100vh - 13rem), 60rem);
+    width: auto;
+    max-width: none;
+  }
+
+  .helpArrow {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    width: 3rem;
+    height: 3rem;
+    margin-top: -1.5rem;
+    padding: 0;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6d55f0, #d0449f);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.15s ease;
+  }
+
+  .helpArrow:hover { transform: scale(1.1); }
+  .helpArrow:active { transform: scale(0.95); }
+  .helpArrow[hidden] { display: none; }
+  .helpArrow.left { left: 0.6rem; }
+  .helpArrow.right { right: 0.6rem; }
+
+  .helpArrow svg {
+    width: 1.6rem;
+    height: 1.6rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  #helpDialog a { color: var(--accent); }
+
+  .helpActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
   }
 
   #micButton:focus-visible,
   #fullscreenButton:focus-visible,
   #settingsButton:focus-visible,
   #themeButton:focus-visible,
-  #settingsDone:focus-visible {
+  #helpButton:focus-visible,
+  #helpDialog a:focus-visible,
+  .helpArrow:focus-visible,
+  .helpScroller:focus-visible,
+  #settingsDone:focus-visible,
+  #helpDone:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
@@ -417,33 +409,61 @@
   <button id="startButton" type="button">Start tuner</button>
   <p id="startMessage" role="alert" aria-live="assertive"></p>
 </div>
-<button id="micButton" type="button" aria-label="Turn microphone on" aria-pressed="false" title="Microphone">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <rect x="9" y="2" width="6" height="12" rx="3"/>
-    <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>
-    <line class="micSlash" x1="3" y1="3" x2="21" y2="21"/>
-  </svg>
-</button>
-<button id="fullscreenButton" type="button" aria-label="Enter full screen" aria-pressed="false" title="Full screen" hidden>
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path class="fsEnter" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
-    <path class="fsExit" d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/>
-  </svg>
-</button>
-<button id="settingsButton" type="button" aria-label="Open settings" aria-haspopup="dialog" title="Settings">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/>
-    <circle cx="16" cy="6" r="2"/>
-    <circle cx="10" cy="12" r="2"/>
-    <circle cx="18" cy="18" r="2"/>
-  </svg>
-</button>
-<button id="themeButton" type="button" aria-label="Change colour theme" title="Colour theme">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="9"/>
-    <path class="themeHalf" d="M12 3a9 9 0 0 1 0 18z"/>
-  </svg>
-</button>
+<nav id="controls" aria-label="Controls">
+  <button id="micButton" type="button" aria-label="Turn microphone on" aria-pressed="false" title="Microphone">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3"/>
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>
+      <line class="micSlash" x1="3" y1="3" x2="21" y2="21"/>
+    </svg>
+  </button>
+  <button id="settingsButton" type="button" aria-label="Open settings" aria-haspopup="dialog" title="Settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/>
+      <circle cx="16" cy="6" r="2"/>
+      <circle cx="10" cy="12" r="2"/>
+      <circle cx="18" cy="18" r="2"/>
+    </svg>
+  </button>
+  <button id="themeButton" type="button" aria-label="Change colour theme" title="Colour theme">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/>
+      <path class="themeHalf" d="M12 3a9 9 0 0 1 0 18z"/>
+    </svg>
+  </button>
+  <button id="helpButton" type="button" aria-label="Open help" aria-haspopup="dialog" title="Help">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/>
+    </svg>
+  </button>
+  <button id="fullscreenButton" type="button" aria-label="Enter full screen" aria-pressed="false" title="Full screen" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path class="fsEnter" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
+      <path class="fsExit" d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/>
+    </svg>
+  </button>
+</nav>
+<dialog id="helpDialog" aria-labelledby="helpTitle">
+  <h2 id="helpTitle">How to use Guitoune</h2>
+  <div class="helpViewer">
+    <!-- tabindex: the arrow keys scroll the picture once it has the focus -->
+    <div id="helpScroller" class="helpScroller" role="region" aria-label="Diagram of the tuner, scrolls sideways" tabindex="0">
+      <!-- Lazy: the picture is only fetched when the dialog is first opened (or by the offline cache) -->
+      <img id="helpImage" src="guitoune_howto.svg" loading="lazy" alt="Diagram of the tuner. The detected string is highlighted in green. The three vertical bars mark minus 10 cents, correct and plus 10 cents. Six arrows link the lanes E2 to E4 to the six strings, from low to high pitch. Below, the microphone, settings, colour theme, help and full screen buttons, grouped in the top left corner, are described.">
+    </div>
+    <button id="helpPrev" class="helpArrow left" type="button" aria-label="Scroll the diagram to the left" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8"/></svg>
+    </button>
+    <button id="helpNext" class="helpArrow right" type="button" aria-label="Scroll the diagram to the right" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8"/></svg>
+    </button>
+  </div>
+  <div class="helpActions">
+    <a href="guitoune_howto.svg" target="_blank" rel="noopener">Open the diagram full size</a>
+    <button id="helpDone" type="button">Close</button>
+  </div>
+</dialog>
 <dialog id="settingsDialog" aria-labelledby="settingsTitle">
   <h2 id="settingsTitle">Settings</h2>
   <div class="settingsField">
@@ -890,13 +910,56 @@ document.getElementById('settingsDone').addEventListener('click', () => settings
 
 // A click on the backdrop reports the dialog itself as target, but so does a click on its padding:
 // only close when the pointer is really outside the box.
-settingsDialog.addEventListener('click', e => {
-  if (e.target !== settingsDialog) return;
-  const box = settingsDialog.getBoundingClientRect();
-  const outside = e.clientX < box.left || e.clientX > box.right ||
-                  e.clientY < box.top  || e.clientY > box.bottom;
-  if (outside) settingsDialog.close();
+function closeOnBackdropClick(dialog){
+  dialog.addEventListener('click', e => {
+    if (e.target !== dialog) return;
+    const box = dialog.getBoundingClientRect();
+    const outside = e.clientX < box.left || e.clientX > box.right ||
+                    e.clientY < box.top  || e.clientY > box.bottom;
+    if (outside) dialog.close();
+  });
+}
+closeOnBackdropClick(settingsDialog);
+
+/*============== HELP =================*/
+const helpButton = document.getElementById('helpButton');
+const helpDialog = document.getElementById('helpDialog');
+
+if (typeof helpDialog.showModal !== 'function') helpButton.hidden = true;
+
+const helpScroller = document.getElementById('helpScroller');
+const helpImage = document.getElementById('helpImage');
+const helpPrev = document.getElementById('helpPrev');
+const helpNext = document.getElementById('helpNext');
+
+// An arrow is only shown while the picture extends beyond the edge on its side
+// (1 px of tolerance for the fractional scroll positions of high-density screens)
+function updateHelpArrows(){
+  const atStart = helpScroller.scrollLeft <= 1;
+  const atEnd = helpScroller.scrollLeft >= helpScroller.scrollWidth - helpScroller.clientWidth - 1;
+  // A hidden button cannot keep the focus: hand it to the picture so the keyboard keeps working
+  if ((atStart && document.activeElement === helpPrev) || (atEnd && document.activeElement === helpNext)) helpScroller.focus();
+  helpPrev.hidden = atStart;
+  helpNext.hidden = atEnd;
+}
+
+function scrollHelp(direction){
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  helpScroller.scrollBy({left: direction * helpScroller.clientWidth * 0.8, behavior: reduced ? 'auto' : 'smooth'});
+}
+
+helpPrev.addEventListener('click', () => scrollHelp(-1));
+helpNext.addEventListener('click', () => scrollHelp(1));
+helpScroller.addEventListener('scroll', updateHelpArrows, {passive: true});
+helpImage.addEventListener('load', updateHelpArrows);
+new ResizeObserver(updateHelpArrows).observe(helpScroller);
+
+helpButton.addEventListener('click', () => {
+  helpDialog.showModal();
+  updateHelpArrows();
 });
+document.getElementById('helpDone').addEventListener('click', () => helpDialog.close());
+closeOnBackdropClick(helpDialog);
 
 // Save battery while the page is in the background. Only the audio graph is suspended:
 // the stream stays open, so the microphone permission is kept and the indicator stays on.
@@ -1099,11 +1162,10 @@ function mainLoop(timestamp){
 }
 
 /*============== DRAW =================*/
-// The pitch history is drawn as a continuous ribbon rather than as cells:
-// - it glides upwards with the time elapsed since the last analysis (`frac`, 0..1);
-// - each segment is a vertical gradient between the hues of two successive readings;
-// - a wide faint pass under a narrow bright one gives a halo (no shadowBlur, which is slow);
-// - on dark themes the passes are added ('lighter') so that overlaps light up;
+// The pitch history is drawn as one cell per reading:
+// - the cells glide upwards with the time elapsed since the last analysis (`frac`, 0..1);
+// - each cell is a vertical gradient from the hue of the previous reading to its own;
+// - on dark themes the cells are added ('lighter') so that overlaps light up;
 // - the trace fades out towards the top, where the oldest readings are.
 function drawTrace(ctx, canvas, history, frac){
   const W = canvas.width, H = canvas.height;
@@ -1111,50 +1173,26 @@ function drawTrace(ctx, canvas, history, frac){
   const colW = W / DSP_CONFIG.COLS;
   const pxPerCent = (W / 2) / displayCents();
 
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
   ctx.globalCompositeOperation = palette.glow ? 'lighter' : 'source-over';
 
   let prev = null;
   history.forEach((entry, i) => {
     if (!entry){ prev = null; return; }
     // The newest row starts one row below the canvas and rises into view
-    const y = (i + 1 - frac) * rowH + rowH / 2;
+    const top = (i + 1 - frac) * rowH;
     const x = W / 2 + entry.cents * pxPerCent;
-    const age = Math.max(0, Math.min(1, y / H));      // 0 at the top (old) .. 1 at the bottom (new)
-    const alpha = entry.alpha * (0.1 + 0.9 * age * age);
+    const age = Math.max(0, Math.min(1, (top + rowH / 2) / H));   // 0 at the top (old) .. 1 at the bottom (new)
     // Full lightness would wash out on a pale background
     const light = palette.glow ? entry.light : Math.min(entry.light, 50);
     const colour = `hsl(${entry.hue},100%,${light}%)`;
 
-    if (prev){
-      // Two readings are never on the same row, so the gradient axis is never degenerate
-      const grad = ctx.createLinearGradient(0, prev.y, 0, y);
-      grad.addColorStop(0, prev.colour);
-      grad.addColorStop(1, colour);
-      ctx.strokeStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(prev.x, prev.y);
-      ctx.lineTo(x, y);
-      ctx.globalAlpha = alpha * 0.2;
-      ctx.lineWidth = colW * 3.2;
-      ctx.stroke();
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth = colW * 1.1;
-      ctx.stroke();
-    } else {
-      // Isolated reading: a soft dot
-      ctx.fillStyle = colour;
-      ctx.globalAlpha = alpha * 0.2;
-      ctx.beginPath();
-      ctx.arc(x, y, colW * 1.6, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(x, y, colW * 0.55, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-    prev = {x, y, colour};
+    const grad = ctx.createLinearGradient(0, top, 0, top + rowH);
+    grad.addColorStop(0, prev ? prev.colour : colour);
+    grad.addColorStop(1, colour);
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = entry.alpha * (0.1 + 0.9 * age * age);
+    ctx.fillRect(x - colW / 2, top, colW, rowH);
+    prev = {colour};
   });
 
   ctx.globalAlpha = 1;
