@@ -2,9 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Only this site may provide scripts, styles, images, the manifest and the service worker.
+     'unsafe-inline' is needed for the inline script and style of this single page. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="description" content="Guitoune: a guitar tuner that runs entirely in your browser, with a real-time waterfall display.">
 <meta name="theme-color" content="#111111">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Guitoune">
+<meta property="og:title" content="Guitoune: Guitar Tuner">
+<meta property="og:description" content="A guitar tuner that runs entirely in your browser, with a real-time waterfall display.">
+<meta property="og:url" content="https://laurentperrinet.github.io/guitoune/">
+<meta property="og:image" content="https://laurentperrinet.github.io/guitoune/icons/icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -416,18 +426,18 @@
 <body>
 <div id="tunerContainer"></div>
 <div id="startOverlay">
-  <button id="startButton" type="button">Start tuner</button>
+  <button id="startButton" type="button" data-i18n="start">Start tuner</button>
   <p id="startMessage" role="alert" aria-live="assertive"></p>
 </div>
-<nav id="controls" aria-label="Controls">
-  <button id="micButton" type="button" aria-label="Turn microphone on" aria-pressed="false" title="Microphone">
+<nav id="controls" aria-label="Controls" data-i18n-aria-label="controls">
+  <button id="micButton" type="button" aria-label="Turn microphone on" aria-pressed="false" title="Microphone" data-i18n-title="micTitle">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="9" y="2" width="6" height="12" rx="3"/>
       <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>
       <line class="micSlash" x1="3" y1="3" x2="21" y2="21"/>
     </svg>
   </button>
-  <button id="settingsButton" type="button" aria-label="Open settings" aria-haspopup="dialog" title="Settings">
+  <button id="settingsButton" type="button" aria-label="Open settings" aria-haspopup="dialog" title="Settings" data-i18n-aria-label="settingsOpen" data-i18n-title="settings">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/>
       <circle cx="16" cy="6" r="2"/>
@@ -441,13 +451,13 @@
       <path class="themeHalf" d="M12 3a9 9 0 0 1 0 18z"/>
     </svg>
   </button>
-  <button id="helpButton" type="button" aria-label="Open help" aria-haspopup="dialog" title="Help">
+  <button id="helpButton" type="button" aria-label="Open help" aria-haspopup="dialog" title="Help" data-i18n-aria-label="helpOpen" data-i18n-title="help">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9"/>
       <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/>
     </svg>
   </button>
-  <button id="fullscreenButton" type="button" aria-label="Enter full screen" aria-pressed="false" title="Full screen" hidden>
+  <button id="fullscreenButton" type="button" aria-label="Enter full screen" aria-pressed="false" title="Full screen" data-i18n-title="fullscreen" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path class="fsEnter" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
       <path class="fsExit" d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/>
@@ -455,47 +465,58 @@
   </button>
 </nav>
 <!-- No visible title: the diagram carries its own "How to use Guitoune?" heading -->
-<dialog id="helpDialog" aria-label="Help">
+<dialog id="helpDialog" aria-label="Help" data-i18n-aria-label="help">
   <div class="helpViewer">
     <!-- tabindex: the arrow keys scroll the picture once it has the focus -->
-    <div id="helpScroller" class="helpScroller" role="region" aria-label="Diagram of the tuner, scrolls sideways" tabindex="0">
+    <div id="helpScroller" class="helpScroller" role="region" aria-label="Diagram of the tuner, scrolls sideways" data-i18n-aria-label="helpScroller" tabindex="0">
       <!-- Lazy: the picture is only fetched when the dialog is first opened (or by the offline cache) -->
-      <img id="helpImage" src="guitoune_howto.svg" loading="lazy" alt="Diagram of the tuner. The detected string is highlighted in green. The three vertical bars mark minus 10 cents, correct and plus 10 cents. Six arrows link the lanes E2 to E4 to the six strings, from low to high pitch. Below, the microphone, settings, colour theme, help and full screen buttons, stacked along the left edge, are described.">
+      <img id="helpImage" src="guitoune_howto.svg" loading="lazy" data-i18n-alt="helpImage" alt="Diagram of the tuner. The detected string is highlighted in green. The three vertical bars mark minus 10 cents, correct and plus 10 cents. Six arrows link the lanes E2 to E4 to the six strings, from low to high pitch. Below, the microphone, settings, colour theme, help and full screen buttons, stacked along the left edge, are described.">
     </div>
-    <button id="helpPrev" class="helpArrow left" type="button" aria-label="Scroll the diagram to the left" hidden>
+    <button id="helpPrev" class="helpArrow left" type="button" aria-label="Scroll the diagram to the left" data-i18n-aria-label="helpPrev" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8"/></svg>
     </button>
-    <button id="helpNext" class="helpArrow right" type="button" aria-label="Scroll the diagram to the right" hidden>
+    <button id="helpNext" class="helpArrow right" type="button" aria-label="Scroll the diagram to the right" data-i18n-aria-label="helpNext" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8"/></svg>
     </button>
   </div>
   <div class="helpActions">
     <p class="helpSource">
-      Source code and licence (AGPLv3):
+      <span data-i18n="helpSource">Source code and licence (AGPLv3):</span>
       <a href="https://github.com/laurentperrinet/guitoune" target="_blank" rel="noopener">github.com/laurentperrinet/guitoune</a>
     </p>
-    <button id="helpDone" type="button">Close</button>
+    <button id="helpDone" type="button" data-i18n="close">Close</button>
   </div>
 </dialog>
 <dialog id="settingsDialog" aria-labelledby="settingsTitle">
-  <h2 id="settingsTitle">Settings</h2>
+  <h2 id="settingsTitle" data-i18n="settings">Settings</h2>
   <div class="settingsField">
-    <label for="tuningSelect">Tuning</label>
+    <label for="tuningSelect" data-i18n="tuning">Tuning</label>
     <select id="tuningSelect"></select>
   </div>
   <div class="settingsField">
-    <label for="a4Input">Reference pitch A4 (Hz)</label>
+    <label for="a4Input" data-i18n="a4">Reference pitch A4 (Hz)</label>
     <input id="a4Input" type="number" inputmode="numeric" step="1">
   </div>
   <div class="settingsField inline">
     <input id="fineInput" type="checkbox">
     <label for="fineInput" id="fineLabel"></label>
   </div>
-  <button id="settingsDone" type="button">Done</button>
+  <div class="settingsField inline">
+    <input id="batteryInput" type="checkbox">
+    <label for="batteryInput" data-i18n="battery">Battery saver (30 frames per second)</label>
+  </div>
+  <div class="settingsField">
+    <label for="languageSelect" data-i18n="language">Language</label>
+    <select id="languageSelect"></select>
+  </div>
+  <button id="settingsDone" type="button" data-i18n="done">Done</button>
 </dialog>
 <div id="liveStatus" class="srOnly" role="status" aria-live="polite"></div>
-<script>
+<script type="module">
+import {PITCH_CONFIG, detectPitch, searchBand, centsBetween, createTracker} from './pitch.js';
+
 /*============== CONFIG =================*/
+// The parameters of the detection are in PITCH_CONFIG (pitch.js); the ones below are for the display.
 const DSP_CONFIG = {
   DISPLAY_CENTS   : 50,    // half-width of the waterfall (cents)
   FINE_DISPLAY_CENTS : 15, // half-width of the waterfall in fine mode (cents)
@@ -506,14 +527,8 @@ const DSP_CONFIG = {
   COLS            : 35,
   ROWS            : 30,
   UPDATE_INTERVAL : 100,
-  FFT_SIZE        : 8192,
-  HP_CUT          : 50,
-  LP_CUT          : 1000,
-  BAND_Q          : 0.707,
-  RMS_THRESHOLD   : 0.005,
-  CORRELATION_MIN : 0.4,
-  MIN_FREQ        : 50,
-  MAX_FREQ        : 1000,
+  SAVER_INTERVAL  : 33,    // time between two redraws in battery saver mode (ms)
+  LEVEL_WINDOW    : 4096,  // newest samples used for the level of the microphone button (samples)
   IN_TUNE_CENTS   : 10,    // |error| below which a string counts as tuned (matches the orange guides)
   LEVEL_MIN_DB   : -60,   // dBFS mapped to green (silence)
   LEVEL_MAX_DB    : -10    // dBFS mapped to red (maximum)
@@ -522,22 +537,30 @@ const DSP_CONFIG = {
 /*============== TUNINGS & SETTINGS =================*/
 const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 
-// Strings are MIDI note numbers (A4 = 69), from the lowest to the highest string.
+// Strings are MIDI note numbers (A4 = 69), in the order of the rows (the lowest string first, except for the ukulele).
+// The names shown in the settings are in I18N, under "tuning.<id>".
 // Frequencies follow from the reference pitch, so changing A4 retunes every preset.
 const TUNINGS = [
-  {id:'standard', label:'Standard (E A D G B E)',          midi:[40,45,50,55,59,64]},
-  {id:'dropD',    label:'Drop D (D A D G B E)',            midi:[38,45,50,55,59,64]},
-  {id:'halfDown', label:'Half step down (E♭ A♭ D♭ G♭ B♭ E♭)', midi:[39,44,49,54,58,63]},
-  {id:'fullDown', label:'Full step down (D G C F A D)',    midi:[38,43,48,53,57,62]},
-  {id:'dadgad',   label:'DADGAD',                          midi:[38,45,50,55,57,62]},
-  {id:'openG',    label:'Open G (D G D G B D)',            midi:[38,43,50,55,59,62]},
-  {id:'openD',    label:'Open D (D A D F♯ A D)',           midi:[38,45,50,54,57,62]}
+  {id:'standard',    group:'guitar',  midi:[40,45,50,55,59,64]},
+  {id:'dropD',       group:'guitar',  midi:[38,45,50,55,59,64]},
+  {id:'halfDown',    group:'guitar',  midi:[39,44,49,54,58,63]},
+  {id:'fullDown',    group:'guitar',  midi:[38,43,48,53,57,62]},
+  {id:'dadgad',      group:'guitar',  midi:[38,45,50,55,57,62]},
+  {id:'openG',       group:'guitar',  midi:[38,43,50,55,59,62]},
+  {id:'openD',       group:'guitar',  midi:[38,45,50,54,57,62]},
+  {id:'bassStandard',group:'bass',    midi:[28,33,38,43]},
+  {id:'bassDropD',   group:'bass',    midi:[26,33,38,43]},
+  // The strings of a ukulele are listed in playing order: the first one is higher than the second
+  {id:'ukulele',     group:'ukulele', midi:[67,60,64,69]},
+  {id:'ukuleleLowG', group:'ukulele', midi:[55,60,64,69]},
+  {id:'baritone',    group:'ukulele', midi:[50,55,59,64]}
 ];
 
 // localStorage can be missing or throw (private windows, blocked site data):
 // the tuner then simply keeps its defaults.
 const SETTINGS_KEY = 'guitoune.settings';
-const settings = {tuning: TUNINGS[0].id, a4: DSP_CONFIG.A4_DEFAULT, fine: false};
+const LANGUAGES = ['auto', 'en', 'fr'];   // 'auto' follows the language of the browser
+const settings = {tuning: TUNINGS[0].id, a4: DSP_CONFIG.A4_DEFAULT, fine: false, battery: false, language: 'auto'};
 
 function clampA4(hz){
   return Math.max(DSP_CONFIG.A4_MIN, Math.min(DSP_CONFIG.A4_MAX, Math.round(hz)));
@@ -549,6 +572,8 @@ function loadSettings(){
     if (TUNINGS.some(t => t.id === saved.tuning)) settings.tuning = saved.tuning;
     if (Number.isFinite(saved.a4)) settings.a4 = clampA4(saved.a4);
     settings.fine = saved.fine === true;
+    settings.battery = saved.battery === true;
+    if (LANGUAGES.includes(saved.language)) settings.language = saved.language;
   }catch(e){ /* keep the defaults */ }
 }
 
@@ -564,30 +589,122 @@ function displayCents(){
   return settings.fine ? DSP_CONFIG.FINE_DISPLAY_CENTS : DSP_CONFIG.DISPLAY_CENTS;
 }
 
-/*============== GUITAR STRINGS =================*/
+/*============== STRINGS =================*/
 // Filled in place by applyTuning(), so that every reference to STRINGS stays valid
-const STRINGS = TUNINGS[0].midi.map(() => ({name:'', freq:0}));
+const STRINGS = [];
+// Band searched for the pitch: that of the strings, plus a margin (see searchBand in pitch.js)
+let searchHz = {minFreq: PITCH_CONFIG.MIN_FREQ, maxFreq: PITCH_CONFIG.MAX_FREQ};
 
 function applyTuning(){
-  const tuning = TUNINGS.find(t => t.id === settings.tuning);
+  const tuning = TUNINGS.find(x => x.id === settings.tuning);
+  STRINGS.length = tuning.midi.length;
   tuning.midi.forEach((midi, i) => {
-    STRINGS[i].name = midiToName(midi);
-    STRINGS[i].freq = midiToFreq(midi);
+    STRINGS[i] = {name: midiToName(midi), freq: midiToFreq(midi)};
   });
+  searchHz = searchBand(STRINGS.map(s => s.freq), DSP_CONFIG.CAPTURE_CENTS);
 }
 
 loadSettings();
 applyTuning();
 
+/*============== LANGUAGE =================*/
+// Every text shown to the user is here. {name} marks a value filled in by tr().
+// The note names stay in letters (C D E F G A B) in both languages.
+const I18N = {
+  en: {
+    title: 'Guitoune: Guitar Tuner',
+    start: 'Start tuner', tryAgain: 'Try again', restart: 'Restart',
+    micInterrupted: 'The microphone was interrupted. Tap to restart.',
+    controls: 'Controls',
+    micOn: 'Turn microphone on', micOff: 'Turn microphone off', micTitle: 'Microphone',
+    settings: 'Settings', settingsOpen: 'Open settings',
+    themeTitle: 'Colour theme: {theme}', themeLabel: 'Colour theme: {theme}. Activate for the next one',
+    help: 'Help', helpOpen: 'Open help',
+    fullscreen: 'Full screen', fullscreenEnter: 'Enter full screen', fullscreenExit: 'Exit full screen',
+    helpScroller: 'Diagram of the tuner, scrolls sideways',
+    helpImage: 'Diagram of the tuner. The detected string is highlighted in green. The three vertical bars mark minus 10 cents, correct and plus 10 cents. Six arrows link the lanes E2 to E4 to the six strings, from low to high pitch. Below, the microphone, settings, colour theme, help and full screen buttons, stacked along the left edge, are described.',
+    helpPrev: 'Scroll the diagram to the left', helpNext: 'Scroll the diagram to the right',
+    helpSource: 'Source code and licence (AGPLv3):', close: 'Close',
+    tuning: 'Tuning', a4: 'Reference pitch A4 (Hz)',
+    fine: 'Fine scale (±{fine} cents instead of ±{coarse})',
+    battery: 'Battery saver (30 frames per second)',
+    language: 'Language', languageAuto: 'Automatic (browser language)', done: 'Done',
+    micNoApi: 'This browser cannot access the microphone (a secure https:// page is required).',
+    micDenied: 'Microphone access was denied. Allow it in the browser settings, then try again.',
+    micNone: 'No microphone was found.',
+    micBusy: 'The microphone is in use by another application.',
+    micOther: 'Microphone error: {message}',
+    announceInTune: '{note}, in tune', announceOff: '{note}, {cents} cents {direction}',
+    flat: 'flat', sharp: 'sharp',
+    'group.guitar': 'Guitar', 'group.bass': 'Bass', 'group.ukulele': 'Ukulele',
+    'tuning.standard': 'Standard (E A D G B E)', 'tuning.dropD': 'Drop D (D A D G B E)',
+    'tuning.halfDown': 'Half step down (E♭ A♭ D♭ G♭ B♭ E♭)', 'tuning.fullDown': 'Full step down (D G C F A D)',
+    'tuning.dadgad': 'DADGAD', 'tuning.openG': 'Open G (D G D G B D)', 'tuning.openD': 'Open D (D A D F♯ A D)',
+    'tuning.bassStandard': 'Bass, 4 strings (E A D G)', 'tuning.bassDropD': 'Bass, drop D (D A D G)',
+    'tuning.ukulele': 'Ukulele (G C E A)', 'tuning.ukuleleLowG': 'Ukulele, low G (G C E A)',
+    'tuning.baritone': 'Baritone ukulele (D G B E)',
+    'theme.dark': 'Dark', 'theme.light': 'Light', 'theme.cappuccino': 'Cappuccino',
+    'theme.wood': 'Wood tones', 'theme.ocean': 'Ocean'
+  },
+  fr: {
+    title: 'Guitoune : accordeur de guitare',
+    start: 'Démarrer l’accordeur', tryAgain: 'Réessayer', restart: 'Redémarrer',
+    micInterrupted: 'Le microphone a été interrompu. Touchez pour redémarrer.',
+    controls: 'Commandes',
+    micOn: 'Allumer le microphone', micOff: 'Éteindre le microphone', micTitle: 'Microphone',
+    settings: 'Réglages', settingsOpen: 'Ouvrir les réglages',
+    themeTitle: 'Thème de couleurs : {theme}', themeLabel: 'Thème de couleurs : {theme}. Activer pour passer au suivant',
+    help: 'Aide', helpOpen: 'Ouvrir l’aide',
+    fullscreen: 'Plein écran', fullscreenEnter: 'Passer en plein écran', fullscreenExit: 'Quitter le plein écran',
+    helpScroller: 'Schéma de l’accordeur, défile horizontalement',
+    helpImage: 'Schéma de l’accordeur (le texte du schéma est en anglais). La corde détectée est surlignée en vert. Les trois barres verticales marquent moins 10 cents, juste et plus 10 cents. Six flèches relient les lignes E2 à E4 aux six cordes, des graves aux aigus. En dessous, les boutons microphone, réglages, thème de couleurs, aide et plein écran, empilés le long du bord gauche, sont décrits.',
+    helpPrev: 'Faire défiler le schéma vers la gauche', helpNext: 'Faire défiler le schéma vers la droite',
+    helpSource: 'Code source et licence (AGPLv3) :', close: 'Fermer',
+    tuning: 'Accordage', a4: 'Diapason A4 (Hz)',
+    fine: 'Échelle fine (±{fine} cents au lieu de ±{coarse})',
+    battery: 'Économie de batterie (30 images par seconde)',
+    language: 'Langue', languageAuto: 'Automatique (langue du navigateur)', done: 'Terminé',
+    micNoApi: 'Ce navigateur ne peut pas accéder au microphone (une page https:// sécurisée est nécessaire).',
+    micDenied: 'L’accès au microphone a été refusé. Autorisez-le dans les réglages du navigateur, puis réessayez.',
+    micNone: 'Aucun microphone n’a été trouvé.',
+    micBusy: 'Le microphone est utilisé par une autre application.',
+    micOther: 'Erreur du microphone : {message}',
+    announceInTune: '{note}, juste', announceOff: '{note}, {cents} cents {direction}',
+    flat: 'trop bas', sharp: 'trop haut',
+    'group.guitar': 'Guitare', 'group.bass': 'Basse', 'group.ukulele': 'Ukulélé',
+    'tuning.standard': 'Standard (E A D G B E)', 'tuning.dropD': 'Drop D (D A D G B E)',
+    'tuning.halfDown': 'Un demi-ton plus bas (E♭ A♭ D♭ G♭ B♭ E♭)', 'tuning.fullDown': 'Un ton plus bas (D G C F A D)',
+    'tuning.dadgad': 'DADGAD', 'tuning.openG': 'Open G (D G D G B D)', 'tuning.openD': 'Open D (D A D F♯ A D)',
+    'tuning.bassStandard': 'Basse 4 cordes (E A D G)', 'tuning.bassDropD': 'Basse, drop D (D A D G)',
+    'tuning.ukulele': 'Ukulélé (G C E A)', 'tuning.ukuleleLowG': 'Ukulélé, sol grave (G C E A)',
+    'tuning.baritone': 'Ukulélé baryton (D G B E)',
+    'theme.dark': 'Sombre', 'theme.light': 'Clair', 'theme.cappuccino': 'Cappuccino',
+    'theme.wood': 'Tons de bois', 'theme.ocean': 'Océan'
+  }
+};
+
+function resolveLanguage(){
+  if (settings.language !== 'auto') return settings.language;
+  return (navigator.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+}
+
+let lang = resolveLanguage();
+
+// Text for `key` in the current language (English if it is missing there), with {name} filled in
+function tr(key, params){
+  const text = I18N[lang][key] ?? I18N.en[key] ?? key;
+  return params ? text.replace(/\{(\w+)\}/g, (match, name) => params[name] ?? match) : text;
+}
+
 /*============== THEMES =================*/
 // Colours live in the CSS variables above; the canvas reads them back in readPalette().
-// `meta` is the browser toolbar colour (theme-color) for that theme.
+// `meta` is the browser toolbar colour (theme-color) for that theme; the names are in I18N ("theme.<id>").
 const THEMES = [
-  {id:'dark',       label:'Dark',       meta:'#111111', glow:true},
-  {id:'light',      label:'Light',      meta:'#f4f4f2', glow:false},
-  {id:'cappuccino', label:'Cappuccino', meta:'#d9c3a5', glow:false},
-  {id:'wood',       label:'Wood tones', meta:'#2b1b10', glow:true},
-  {id:'ocean',      label:'Ocean',      meta:'#0a1626', glow:true}
+  {id:'dark',       meta:'#111111', glow:true},
+  {id:'light',      meta:'#f4f4f2', glow:false},
+  {id:'cappuccino', meta:'#d9c3a5', glow:false},
+  {id:'wood',       meta:'#2b1b10', glow:true},
+  {id:'ocean',      meta:'#0a1626', glow:true}
 ];
 const THEME_KEY = 'guitoune.theme';
 const themeButton = document.getElementById('themeButton');
@@ -606,8 +723,9 @@ function applyTheme(){
   const theme = THEMES[themeIdx];
   document.documentElement.dataset.theme = theme.id;
   document.querySelector('meta[name="theme-color"]').setAttribute('content', theme.meta);
-  themeButton.title = `Colour theme: ${theme.label}`;
-  themeButton.setAttribute('aria-label', `Colour theme: ${theme.label}. Activate for the next one`);
+  const name = tr('theme.' + theme.id);
+  themeButton.title = tr('themeTitle', {theme: name});
+  themeButton.setAttribute('aria-label', tr('themeLabel', {theme: name}));
   readPalette();
 }
 
@@ -634,28 +752,37 @@ const canvases = [];
 const noteLabels = [];    // note name of each row
 const noteDetails = [];   // direction hint, cents and Hz under the note name
 
-STRINGS.forEach(s => {
-  const row = document.createElement('div');
-  row.className = 'stringRow';
-  // The waterfall is decorative: the same information is given as text in the label
-  row.innerHTML = `<canvas aria-hidden="true"></canvas>
+// One row (waterfall and label) per string; rebuilt when the tuning has another number of strings
+function buildRows(){
+  container.replaceChildren();
+  canvases.length = noteLabels.length = noteDetails.length = 0;
+  STRINGS.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'stringRow';
+    // The waterfall is decorative: the same information is given as text in the label
+    row.innerHTML = `<canvas aria-hidden="true"></canvas>
     <div class="noteLabel"><div class="noteName">${s.name}</div><div class="noteDetail"></div></div>`;
-  container.appendChild(row);
-  canvases.push(row.querySelector('canvas'));
-  noteLabels.push(row.querySelector('.noteName'));
-  noteDetails.push(row.querySelector('.noteDetail'));
-});
+    container.appendChild(row);
+    canvases.push(row.querySelector('canvas'));
+    noteLabels.push(row.querySelector('.noteName'));
+    noteDetails.push(row.querySelector('.noteDetail'));
+  });
+}
+buildRows();
 
 /*============== AUDIO =================*/
-let audioCtx, analyser, source, hp, lp;
+let audioCtx, analyser, source;
 let stream = null;      // kept so that stop() can release the microphone
 let rafId = null;       // kept so that stop() can cancel the render loop
 let starting = false;   // guards against double clicks during the permission prompt
 let wakeLock = null;    // keeps the screen on while tuning
-let timeBuf = null;     // reused for every analysis to avoid allocating 32 kB ten times a second
+let timeBuf = null;     // reused for every analysis to avoid allocating 64 kB ten times a second
 let pixelRatio = 1;     // canvas pixels per CSS pixel, so that Retina screens stay sharp
-let lastUpdate = 0;
+let lastUpdate = 0;     // time stamp of the last analysis (ms)
+let lastDraw = 0;       // time stamp of the last redraw (ms), used by the battery saver
 let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
+// Median of the last readings and stable choice of the string, see createTracker in pitch.js
+const tracker = createTracker();
 
 const micButton = document.getElementById('micButton');
 const startOverlay = document.getElementById('startOverlay');
@@ -668,11 +795,12 @@ let lastAnnounceTime = -Infinity;   // its time stamp (ms): the first sentence i
 let targetLevel = 0;    // 0..1, measured every update interval
 let displayLevel = 0;   // 0..1, smoothed every frame (fast attack, slow decay)
 
-// Raw RMS (not windowed) in dBFS, mapped linearly to 0..1
+// RMS of the newest samples (not windowed) in dBFS, mapped linearly to 0..1
 function levelFromBuffer(buf){
+  const n = Math.min(buf.length, DSP_CONFIG.LEVEL_WINDOW);
   let sumSq = 0;
-  for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
-  const db = 20 * Math.log10(Math.sqrt(sumSq / buf.length) + 1e-9);
+  for (let i = buf.length - n; i < buf.length; i++) sumSq += buf[i] * buf[i];
+  const db = 20 * Math.log10(Math.sqrt(sumSq / n) + 1e-9);
   const span = DSP_CONFIG.LEVEL_MAX_DB - DSP_CONFIG.LEVEL_MIN_DB;
   return Math.max(0, Math.min(1, (db - DSP_CONFIG.LEVEL_MIN_DB) / span));
 }
@@ -686,7 +814,7 @@ function updateMicColour(){
 function setMicState(on){
   micButton.classList.toggle('listening', on);
   micButton.setAttribute('aria-pressed', String(on));
-  micButton.setAttribute('aria-label', on ? 'Turn microphone off' : 'Turn microphone on');
+  micButton.setAttribute('aria-label', tr(on ? 'micOff' : 'micOn'));
 }
 
 function setLabel(idx, name, colour, detail){
@@ -700,6 +828,7 @@ function setLabel(idx, name, colour, detail){
 // (when the microphone stops, or when a setting changes the meaning of the columns)
 function resetDisplay(){
   histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
+  tracker.reset();
   lastAnnouncement = '';
   STRINGS.forEach((s, idx) => setLabel(idx, s.name, 'var(--label)', ''));
   draw();
@@ -710,15 +839,16 @@ function formatReadout(cents, freq, inTune){
   const rounded = Math.round(cents);
   const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '±';
   const hint = inTune ? '✓' : (cents < 0 ? '↑' : '↓');
-  return `${hint} ${sign}${Math.abs(rounded)} ¢ · ${freq.toFixed(1)} Hz`;
+  const hz = freq.toLocaleString(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1});   // 109.3 or 109,3
+  return `${hint} ${sign}${Math.abs(rounded)} ¢ · ${hz} Hz`;
 }
 
 // Screen readers hear a short sentence when the state changes, at most every 1.5 s
 function announce(idx, cents, inTune, now){
-  const state = inTune
-    ? 'in tune'
-    : `${Math.round(Math.abs(cents) / 5) * 5} cents ${cents < 0 ? 'flat' : 'sharp'}`;
-  const message = `${STRINGS[idx].name}, ${state}`;
+  const note = STRINGS[idx].name;
+  const message = inTune
+    ? tr('announceInTune', {note})
+    : tr('announceOff', {note, cents: Math.round(Math.abs(cents) / 5) * 5, direction: tr(cents < 0 ? 'flat' : 'sharp')});
   if (message === lastAnnouncement || now - lastAnnounceTime < 1500) return;
   lastAnnouncement = message;
   lastAnnounceTime = now;
@@ -727,20 +857,29 @@ function announce(idx, cents, inTune, now){
 
 /*============== START / STOP =================*/
 function describeMicError(e){
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
-    return 'This browser cannot access the microphone (a secure https:// page is required).';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return tr('micNoApi');
   switch (e && e.name){
     case 'NotAllowedError':
     case 'SecurityError':
-      return 'Microphone access was denied. Allow it in the browser settings, then try again.';
+      return tr('micDenied');
     case 'NotFoundError':
     case 'OverconstrainedError':
-      return 'No microphone was found.';
+      return tr('micNone');
     case 'NotReadableError':
-      return 'The microphone is in use by another application.';
+      return tr('micBusy');
     default:
-      return 'Microphone error: ' + (e && e.message ? e.message : e);
+      return tr('micOther', {message: e && e.message ? e.message : e});
   }
+}
+
+// The start screen is shown first, and again after an error or an interruption of the microphone.
+// `mode` is the key of the button text: 'start', 'tryAgain' or 'restart'.
+let startMode = 'start';
+function showStart(mode, message){
+  startMode = mode;
+  startMessage.textContent = message;
+  startButton.textContent = tr(mode);
+  startOverlay.hidden = false;
 }
 
 // The screen wake lock is released by the browser when the page is hidden,
@@ -776,29 +915,19 @@ async function startTuner(){
     }});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    hp = audioCtx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = DSP_CONFIG.HP_CUT;
-    hp.Q.value = DSP_CONFIG.BAND_Q;
-
-    lp = audioCtx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = DSP_CONFIG.LP_CUT;
-    lp.Q.value = DSP_CONFIG.BAND_Q;
-
+    // No Web Audio filter: the high-pass is applied by detectPitch(), where it can be tested
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = DSP_CONFIG.FFT_SIZE;
+    analyser.fftSize = PITCH_CONFIG.FFT_SIZE;
     timeBuf = new Float32Array(analyser.fftSize);
 
     source = audioCtx.createMediaStreamSource(stream);
-    source.connect(hp);
-    hp.connect(lp);
-    lp.connect(analyser);
+    source.connect(analyser);
 
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     resizeCanvases();
     setMicState(true);
+    startMode = 'start';
     startOverlay.hidden = true;
     requestWakeLock();
     rafId = requestAnimationFrame(mainLoop);
@@ -807,11 +936,9 @@ async function startTuner(){
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = null;
     if (audioCtx) audioCtx.close().catch(() => {});
-    audioCtx = analyser = source = hp = lp = null;
+    audioCtx = analyser = source = null;
     setMicState(false);
-    startMessage.textContent = describeMicError(e);
-    startButton.textContent = 'Try again';
-    startOverlay.hidden = false;
+    showStart('tryAgain', describeMicError(e));
   }finally{
     starting = false;
   }
@@ -823,7 +950,7 @@ function stopTuner(){
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null;
   if (audioCtx) audioCtx.close();
-  audioCtx = analyser = source = hp = lp = null;
+  audioCtx = analyser = source = null;
   releaseWakeLock();
 
   resetDisplay();
@@ -852,7 +979,7 @@ function updateFullscreenButton(){
   const on = isFullscreen();
   fullscreenButton.classList.toggle('active', on);
   fullscreenButton.setAttribute('aria-pressed', String(on));
-  fullscreenButton.setAttribute('aria-label', on ? 'Exit full screen' : 'Enter full screen');
+  fullscreenButton.setAttribute('aria-label', tr(on ? 'fullscreenExit' : 'fullscreenEnter'));
 }
 
 fullscreenButton.addEventListener('click', () => {
@@ -874,27 +1001,67 @@ const settingsDialog = document.getElementById('settingsDialog');
 const tuningSelect = document.getElementById('tuningSelect');
 const a4Input = document.getElementById('a4Input');
 const fineInput = document.getElementById('fineInput');
+const fineLabel = document.getElementById('fineLabel');
+const batteryInput = document.getElementById('batteryInput');
+const languageSelect = document.getElementById('languageSelect');
 
 // <dialog> is missing from very old browsers: hide the button rather than break the page
 if (typeof settingsDialog.showModal !== 'function') settingsButton.hidden = true;
 
-TUNINGS.forEach(t => tuningSelect.add(new Option(t.label, t.id)));
 a4Input.min = DSP_CONFIG.A4_MIN;
 a4Input.max = DSP_CONFIG.A4_MAX;
-document.getElementById('fineLabel').textContent =
-  `Fine scale (±${DSP_CONFIG.FINE_DISPLAY_CENTS} cents instead of ±${DSP_CONFIG.DISPLAY_CENTS})`;
+
+// The lists and the labels that the script writes itself are filled again when the language changes
+function fillTuningSelect(){
+  tuningSelect.replaceChildren();
+  for (const group of ['guitar', 'bass', 'ukulele']){
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = tr('group.' + group);
+    TUNINGS.filter(x => x.group === group).forEach(x => optgroup.append(new Option(tr('tuning.' + x.id), x.id)));
+    tuningSelect.append(optgroup);
+  }
+  tuningSelect.value = settings.tuning;
+}
+
+function fillLanguageSelect(){
+  languageSelect.replaceChildren(
+    new Option(tr('languageAuto'), 'auto'), new Option('English', 'en'), new Option('Français', 'fr'));
+  languageSelect.value = settings.language;
+}
+
+function applyLanguage(){
+  lang = resolveLanguage();
+  document.documentElement.lang = lang;
+  document.title = tr('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = tr(el.dataset.i18n); });
+  for (const [attribute, key] of [['aria-label', 'i18nAriaLabel'], ['title', 'i18nTitle'], ['alt', 'i18nAlt']]){
+    document.querySelectorAll(`[data-i18n-${attribute}]`).forEach(el => el.setAttribute(attribute, tr(el.dataset[key])));
+  }
+  fillTuningSelect();
+  fillLanguageSelect();
+  fineLabel.textContent = tr('fine', {fine: DSP_CONFIG.FINE_DISPLAY_CENTS, coarse: DSP_CONFIG.DISPLAY_CENTS});
+  startButton.textContent = tr(startMode);
+  setMicState(micButton.classList.contains('listening'));
+  updateFullscreenButton();
+  applyTheme();
+}
 
 function syncSettingsControls(){
   tuningSelect.value = settings.tuning;
   a4Input.value = settings.a4;
   fineInput.checked = settings.fine;
+  batteryInput.checked = settings.battery;
+  languageSelect.value = settings.language;
 }
 
-// Strings and columns change meaning, so the history is cleared along with the labels
+// Strings and columns change meaning (and the tuning may have another number of strings),
+// so the rows are built again and the history is cleared along with the labels
 function settingsChanged(){
   applyTuning();
   saveSettings();
-  resetDisplay();
+  buildRows();
+  resetDisplay();      // before the resize: the histories must have one entry per row when it redraws
+  resizeCanvases();
 }
 
 tuningSelect.addEventListener('change', () => {
@@ -912,6 +1079,17 @@ a4Input.addEventListener('change', () => {
 fineInput.addEventListener('change', () => {
   settings.fine = fineInput.checked;
   settingsChanged();
+});
+
+batteryInput.addEventListener('change', () => {
+  settings.battery = batteryInput.checked;
+  saveSettings();
+});
+
+languageSelect.addEventListener('change', () => {
+  settings.language = LANGUAGES.includes(languageSelect.value) ? languageSelect.value : 'auto';
+  saveSettings();
+  applyLanguage();
 });
 
 settingsButton.addEventListener('click', () => {
@@ -985,9 +1163,7 @@ document.addEventListener('visibilitychange', () => {
     // the analyser would then silently show nothing, so offer a restart instead.
     if (stream && stream.getAudioTracks().every(t => t.readyState === 'ended')){
       stopTuner();
-      startMessage.textContent = 'The microphone was interrupted. Tap to restart.';
-      startButton.textContent = 'Restart';
-      startOverlay.hidden = false;
+      showStart('restart', tr('micInterrupted'));
       return;
     }
     audioCtx.resume();
@@ -1009,84 +1185,6 @@ function resizeCanvases(){
 
 // ResizeObserver covers window resizes and orientation changes without arbitrary timeouts
 new ResizeObserver(resizeCanvases).observe(container);
-
-/*============== AUTOCORRELATION =================*/
-function autoCorrelate(buf, sampleRate) {
-  const SIZE = buf.length;
-
-  // Apply a Hanning window
-  const windowedBuf = new Float32Array(SIZE);
-  for (let i = 0; i < SIZE; i++) {
-    const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / SIZE));
-    windowedBuf[i] = buf[i] * window;
-  }
-
-  // RMS check
-  let sumSq = 0;
-  for (let i = 0; i < SIZE; i++) sumSq += windowedBuf[i] * windowedBuf[i];
-  const rms = Math.sqrt(sumSq / SIZE);
-  if (rms < DSP_CONFIG.RMS_THRESHOLD) return null;
-
-  // Search range for guitar frequencies
-  const minLag = Math.floor(sampleRate / DSP_CONFIG.MAX_FREQ);
-  const maxLag = Math.floor(sampleRate / DSP_CONFIG.MIN_FREQ);
-
-  let bestLag = -1;
-  let bestCorr = -1;
-
-  // Enhanced autocorrelation
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    let num = 0;
-    let den1 = 0;
-    let den2 = 0;
-
-    for (let i = 0; i < SIZE - lag; i++) {
-      num += windowedBuf[i] * windowedBuf[i + lag];
-      den1 += windowedBuf[i] * windowedBuf[i];
-      den2 += windowedBuf[i + lag] * windowedBuf[i + lag];
-    }
-
-    const denom = Math.sqrt(den1 * den2);
-    if (denom === 0) continue;
-
-    const corr = num / denom;
-    if (corr > bestCorr) {
-      bestCorr = corr;
-      bestLag = lag;
-    }
-  }
-
-  if (bestLag === -1 || bestCorr < DSP_CONFIG.CORRELATION_MIN) return null;
-
-  // Parabolic interpolation
-  if (bestLag > minLag && bestLag < maxLag) {
-    const y1 = autocorrAt(windowedBuf, bestLag - 1);
-    const y2 = bestCorr;
-    const y3 = autocorrAt(windowedBuf, bestLag + 1);
-
-    const d = (y1 - 2*y2 + y3);
-    if (d !== 0) {
-      const delta = (y1 - y3) / (2 * d);
-      if (Math.abs(delta) < 1) bestLag += delta;
-    }
-  }
-
-  return {
-    freq: sampleRate / bestLag,
-    correlation: bestCorr
-  };
-}
-
-function autocorrAt(buf, lag) {
-  let num = 0, den1 = 0, den2 = 0;
-  for (let i = 0; i < buf.length - lag; i++) {
-    num += buf[i] * buf[i + lag];
-    den1 += buf[i] * buf[i];
-    den2 += buf[i + lag] * buf[i + lag];
-  }
-  const denom = Math.sqrt(den1 * den2);
-  return denom === 0 ? 0 : num / denom;
-}
 
 /*============== HELPERS =================*/
 function hueFromCents(c){
@@ -1115,39 +1213,30 @@ function mainLoop(timestamp){
     analyser.getFloatTimeDomainData(buf);
 
     targetLevel = levelFromBuffer(buf);
-    const detection = autoCorrelate(buf, audioCtx.sampleRate);
 
-    // Find closest string
-    let activeIdx = -1;
-    let minCents = Infinity;
-    const centsArray = [];
-
-    if (detection) {
-      STRINGS.forEach((s, i) => {
-        const cents = 1200 * Math.log2(detection.freq / s.freq);
-        centsArray[i] = cents;
-        const absCents = Math.abs(cents);
-        if (absCents < minCents) {
-          minCents = absCents;
-          activeIdx = i;
-        }
-      });
-
-      if (minCents > DSP_CONFIG.CAPTURE_CENTS) activeIdx = -1;
-    }
+    // The raw reading goes through the tracker: a median of the last readings and a stable choice
+    // of string, so that one doubtful analysis neither jumps nor makes the label flicker
+    const reading = detectPitch(buf, audioCtx.sampleRate, searchHz);
+    const tracked = tracker.update(reading ? reading.freq : null, STRINGS, DSP_CONFIG.CAPTURE_CENTS);
+    const activeIdx = tracked.activeIdx;
+    // `held`: no reading this time, but the last string is kept for a moment (the labels stay)
+    const detection = reading && !tracked.held ? {freq: tracked.freq, clarity: reading.clarity} : null;
+    const centsArray = detection ? STRINGS.map(s => centsBetween(detection.freq, s.freq)) : [];
 
     // Update labels: green only when the string is actually in tune, orange when merely identified
-    STRINGS.forEach((s, idx) => {
-      if (idx === activeIdx && detection) {
-        const cents = centsArray[idx];
-        const inTune = Math.abs(cents) <= DSP_CONFIG.IN_TUNE_CENTS;
-        setLabel(idx, noteNameFromFreq(detection.freq), inTune ? 'var(--accent)' : 'var(--warn)',
-                 formatReadout(cents, detection.freq, inTune));
-        announce(idx, cents, inTune, timestamp);
-      } else {
-        setLabel(idx, s.name, 'var(--label)', '');
-      }
-    });
+    if (!tracked.held){
+      STRINGS.forEach((s, idx) => {
+        if (idx === activeIdx && detection) {
+          const cents = centsArray[idx];
+          const inTune = Math.abs(cents) <= DSP_CONFIG.IN_TUNE_CENTS;
+          setLabel(idx, noteNameFromFreq(detection.freq), inTune ? 'var(--accent)' : 'var(--warn)',
+                   formatReadout(cents, detection.freq, inTune));
+          announce(idx, cents, inTune, timestamp);
+        } else {
+          setLabel(idx, s.name, 'var(--label)', '');
+        }
+      });
+    }
 
     // Update history
     STRINGS.forEach((s, idx) => {
@@ -1156,9 +1245,9 @@ function mainLoop(timestamp){
       if (detection && (idx === activeIdx || Math.abs(centsArray[idx]) <= displayCents())) {
         const cents = centsArray[idx];
         const hue = hueFromCents(cents);
-        const corr = detection.correlation;
-        const light = 10 + 80 * corr;
-        const alpha = activeIdx === idx ? corr : corr * 0.5;
+        const clarity = detection.clarity;
+        const light = 10 + 80 * clarity;
+        const alpha = activeIdx === idx ? clarity : clarity * 0.5;
         entry = {cents: Math.max(-displayCents(), Math.min(displayCents(), cents)), hue, light, alpha};
       }
       histories[idx].push(entry);
@@ -1170,7 +1259,12 @@ function mainLoop(timestamp){
   }
 
   updateMicColour();
-  if (updated || histories.some(h => h.some(Boolean))) draw(timestamp);
+  // Battery saver: between two analyses the trace is redrawn at 30 frames per second, not at every frame
+  const due = !settings.battery || timestamp - lastDraw >= DSP_CONFIG.SAVER_INTERVAL;
+  if (updated || (due && histories.some(h => h.some(Boolean)))){
+    draw(timestamp);
+    lastDraw = timestamp;
+  }
   rafId = requestAnimationFrame(mainLoop);
 }
 
@@ -1258,6 +1352,7 @@ function draw(now){
 /*============== START =================*/
 // No automatic start: the microphone and audio context need a user gesture.
 // The observer above has already drawn the empty guides behind the start screen.
+applyLanguage();
 resizeCanvases();
 
 // Offline use and installation. Service workers need https (or localhost) and are optional:

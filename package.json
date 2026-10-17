@@ -1,0 +1,10 @@
+{
+  "name": "guitoune",
+  "private": true,
+  "description": "A guitar tuner that runs entirely in the browser",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "license": "AGPL-3.0-only"
+}

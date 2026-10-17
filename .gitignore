@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Node (no package is needed, but a local install must not be committed)
+node_modules/
+npm-debug.log*
+
+# Editors and local tools
+.vscode/
+.idea/
+.claude/settings.local.json
+
+# Local scratch files
+*.log
+*.tmp
