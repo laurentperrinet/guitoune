@@ -329,6 +329,7 @@
     height: clamp(22rem, calc(100vh - 13rem), 60rem);
     width: auto;
     max-width: none;
+    margin: 0 auto;   /* centred when it fits; ignored when it overflows and scrolls */
   }
 
   .helpArrow {
@@ -369,6 +370,14 @@
   }
 
   #helpDialog a { color: var(--accent); }
+
+  /* Shares the row with the Close button and wraps below it on narrow screens */
+  .helpSource {
+    flex: 1 1 14rem;
+    margin: 0;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
 
   .helpActions {
     display: flex;
@@ -445,8 +454,8 @@
     </svg>
   </button>
 </nav>
-<dialog id="helpDialog" aria-labelledby="helpTitle">
-  <h2 id="helpTitle">How to use Guitoune</h2>
+<!-- No visible title: the diagram carries its own "How to use Guitoune?" heading -->
+<dialog id="helpDialog" aria-label="Help">
   <div class="helpViewer">
     <!-- tabindex: the arrow keys scroll the picture once it has the focus -->
     <div id="helpScroller" class="helpScroller" role="region" aria-label="Diagram of the tuner, scrolls sideways" tabindex="0">
@@ -461,7 +470,10 @@
     </button>
   </div>
   <div class="helpActions">
-    <a href="guitoune_howto.svg" target="_blank" rel="noopener">Open the diagram full size</a>
+    <p class="helpSource">
+      Source code and licence (AGPLv3):
+      <a href="https://github.com/laurentperrinet/guitoune" target="_blank" rel="noopener">github.com/laurentperrinet/guitoune</a>
+    </p>
     <button id="helpDone" type="button">Close</button>
   </div>
 </dialog>
