@@ -73,19 +73,19 @@
       <circle cx="-19.5" cy="-41.5" r="3" fill="#fff6d0" stroke="#3b2f08" stroke-width="1"/>
       <circle cx="19.5" cy="-41.5" r="3" fill="#fff6d0" stroke="#3b2f08" stroke-width="1"/>
     </g>
-    <linearGradient id="gWingOrange" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd07a"/><stop offset="0.6" stop-color="#ff9a2e"/><stop offset="1" stop-color="#d9500a"/></linearGradient>
-    <g id="wingOrange">
-      <path d="M-2 -3 C-6 -28 -26 -44 -48 -38 C-46 -20 -36 -2 -2 3 Z" fill="url(#gWingOrange)" stroke="#4a1d05" stroke-width="1.5" stroke-linejoin="round"/>
-      <path d="M-2 4 C-24 0 -40 8 -42 32 C-24 32 -6 24 -2 10 Z" fill="url(#gWingOrange)" stroke="#4a1d05" stroke-width="1.5" stroke-linejoin="round"/>
-      <g fill="none" stroke="#8a3a0a" stroke-width="1" opacity="0.85" stroke-linecap="round">
+    <linearGradient id="gWingRed" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a8c"/><stop offset="0.6" stop-color="#f44336"/><stop offset="1" stop-color="#a50f1a"/></linearGradient>
+    <g id="wingRed">
+      <path d="M-2 -3 C-6 -28 -26 -44 -48 -38 C-46 -20 -36 -2 -2 3 Z" fill="url(#gWingRed)" stroke="#5a0a10" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M-2 4 C-24 0 -40 8 -42 32 C-24 32 -6 24 -2 10 Z" fill="url(#gWingRed)" stroke="#5a0a10" stroke-width="1.5" stroke-linejoin="round"/>
+      <g fill="none" stroke="#7d0d14" stroke-width="1" opacity="0.85" stroke-linecap="round">
         <path d="M-4 -2 L-40 -33"/><path d="M-4 0 L-38 -14"/><path d="M-4 6 L-34 26"/><path d="M-4 7 L-24 22"/>
       </g>
-      <circle cx="-27" cy="-13" r="2.6" fill="#fff6dd" stroke="#8a5a2a" stroke-width="0.7"/>
-      <circle cx="-21" cy="15" r="2.2" fill="#fff6dd" stroke="#8a5a2a" stroke-width="0.7"/>
+      <circle cx="-27" cy="-13" r="2.6" fill="#fff1d0" stroke="#8a4a2a" stroke-width="0.7"/>
+      <circle cx="-21" cy="15" r="2.2" fill="#fff1d0" stroke="#8a4a2a" stroke-width="0.7"/>
     </g>
-    <g id="butterflyOrange">
-      <use href="#wingOrange"/>
-      <use href="#wingOrange" transform="scale(-1 1)"/>
+    <g id="butterflyRed">
+      <use href="#wingRed"/>
+      <use href="#wingRed" transform="scale(-1 1)"/>
       <ellipse cx="0" cy="1" rx="2.8" ry="14" fill="#4a3a0c" stroke="#2b2205" stroke-width="0.8"/>
       <circle cx="0" cy="-14" r="3.3" fill="#4a3a0c" stroke="#2b2205" stroke-width="0.8"/>
       <g fill="none" stroke-linecap="round">
@@ -139,6 +139,28 @@
       <circle cx="-19.5" cy="-41.5" r="3" fill="#fff6d0" stroke="#3b2f08" stroke-width="1"/>
       <circle cx="19.5" cy="-41.5" r="3" fill="#fff6d0" stroke="#3b2f08" stroke-width="1"/>
     </g>
+    <linearGradient id="gWingPink" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc2e0"/><stop offset="0.6" stop-color="#ff6fae"/><stop offset="1" stop-color="#c2185b"/></linearGradient>
+    <g id="wingPink">
+      <path d="M-2 -3 C-6 -28 -26 -44 -48 -38 C-46 -20 -36 -2 -2 3 Z" fill="url(#gWingPink)" stroke="#6d0a3a" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M-2 4 C-24 0 -40 8 -42 32 C-24 32 -6 24 -2 10 Z" fill="url(#gWingPink)" stroke="#6d0a3a" stroke-width="1.5" stroke-linejoin="round"/>
+      <g fill="none" stroke="#a01450" stroke-width="1" opacity="0.85" stroke-linecap="round">
+        <path d="M-4 -2 L-40 -33"/><path d="M-4 0 L-38 -14"/><path d="M-4 6 L-34 26"/><path d="M-4 7 L-24 22"/>
+      </g>
+      <circle cx="-27" cy="-13" r="2.6" fill="#fff3b0" stroke="#9a7a10" stroke-width="0.7"/>
+      <circle cx="-21" cy="15" r="2.2" fill="#fff3b0" stroke="#9a7a10" stroke-width="0.7"/>
+    </g>
+    <g id="butterflyPink">
+      <use href="#wingPink"/>
+      <use href="#wingPink" transform="scale(-1 1)"/>
+      <ellipse cx="0" cy="1" rx="2.8" ry="14" fill="#4a3a0c" stroke="#2b2205" stroke-width="0.8"/>
+      <circle cx="0" cy="-14" r="3.3" fill="#4a3a0c" stroke="#2b2205" stroke-width="0.8"/>
+      <g fill="none" stroke-linecap="round">
+        <path d="M-1 -16 C-3 -29 -10 -38 -19 -41 M1 -16 C3 -29 10 -38 19 -41" stroke="#3b2f08" stroke-width="3.2"/>
+        <path d="M-1 -16 C-3 -29 -10 -38 -19 -41 M1 -16 C3 -29 10 -38 19 -41" stroke="#fff6d0" stroke-width="1.6"/>
+      </g>
+      <circle cx="-19.5" cy="-41.5" r="3" fill="#fff6d0" stroke="#3b2f08" stroke-width="1"/>
+      <circle cx="19.5" cy="-41.5" r="3" fill="#fff6d0" stroke="#3b2f08" stroke-width="1"/>
+    </g>
     <g id="cornflower">
       <g fill="url(#gBlue)" stroke="#142a7a" stroke-width="0.9"><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(0.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(36.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(72.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(108.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(144.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(180.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(216.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(252.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(288.0)" /><ellipse cx="0" cy="-16" rx="4.6" ry="13" transform="rotate(324.0)" /></g>
       <g fill="url(#gBlue)" stroke="#142a7a" stroke-width="0.9"><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(18.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(54.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(90.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(126.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(162.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(198.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(234.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(270.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(306.0)" /><ellipse cx="0" cy="-12" rx="4.6" ry="10" transform="rotate(342.0)" /></g>
@@ -163,7 +185,7 @@
     </g>
     <path d="M244 176 Q256 182 268 176 L268 184 Q256 190 244 184 Z" fill="#e53935" stroke="#7f1514" stroke-width="1.2"/>
     <!-- Small flying butterflies -->
-    <path d="M470 190 Q472 144 430 118" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyOrange" transform="translate(430 118) rotate(28) scale(0.52)"/><path d="M40 250 Q79 203 74 176" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyBlue" transform="translate(74 176) rotate(-32) scale(0.48)"/><path d="M452 330 Q452 286 408 262" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyWhite" transform="translate(408 262) rotate(40) scale(0.44)"/><path d="M52 350 Q96 311 96 292" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyLemon" transform="translate(96 292) rotate(-22) scale(0.42)"/>
+    <path d="M488 130 C482.5 125.8 456.7 115.0 455 105 C453.3 95.0 480.5 76.8 478 70 C475.5 63.2 448.0 70.7 440 64 C432.0 57.3 435.8 32.0 430 30 C424.2 28.0 411.3 51.0 405 52 C398.7 53.0 394.2 38.7 392 36" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyBlue" transform="translate(392 36) rotate(-39) scale(0.5)"/><path d="M486 330 C480.3 324.3 454.0 309.0 452 296 C450.0 283.0 476.7 257.0 474 252 C471.3 247.0 441.0 272.3 436 266 C431.0 259.7 448.0 224.0 444 214 C440.0 204.0 413.3 212.3 412 206 C410.7 199.7 438.0 185.3 436 176 C434.0 166.7 406.0 154.3 400 150" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyWhite" transform="translate(400 150) rotate(-54) scale(0.5)"/><path d="M20 300 C25.3 293.7 51.0 274.7 52 262 C53.0 249.3 23.3 231.7 26 224 C28.7 216.3 62.7 224.0 68 216 C73.3 208.0 54.3 182.0 58 176 C61.7 170.0 85.7 184.3 90 180 C94.3 175.7 81.3 158.3 84 150 C86.7 141.7 102.3 133.3 106 130" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyRed" transform="translate(106 130) rotate(48) scale(0.5)"/><path d="M40 430 C46.3 425.0 76.0 411.7 78 400 C80.0 388.3 48.3 368.0 52 360 C55.7 352.0 93.3 360.3 100 352 C106.7 343.7 87.3 316.3 92 310 C96.7 303.7 124.7 319.3 128 314 C131.3 308.7 110.0 286.7 112 278 C114.0 269.3 135.3 264.7 140 262" fill="none" stroke="#f1dca8" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity="0.55"/><use href="#butterflyPink" transform="translate(140 262) rotate(60) scale(0.5)"/>
     
     <!-- Headstock -->
     <line x1="240" y1="192" x2="232" y2="192" stroke="#c9ced6" stroke-width="2.4"/><ellipse cx="227" cy="192" rx="5.5" ry="4.2" fill="url(#gSteel)" stroke="#59616b" stroke-width="0.9"/><line x1="272" y1="192" x2="280" y2="192" stroke="#c9ced6" stroke-width="2.4"/><ellipse cx="285" cy="192" rx="5.5" ry="4.2" fill="url(#gSteel)" stroke="#59616b" stroke-width="0.9"/><line x1="240" y1="205" x2="232" y2="205" stroke="#c9ced6" stroke-width="2.4"/><ellipse cx="227" cy="205" rx="5.5" ry="4.2" fill="url(#gSteel)" stroke="#59616b" stroke-width="0.9"/><line x1="272" y1="205" x2="280" y2="205" stroke="#c9ced6" stroke-width="2.4"/><ellipse cx="285" cy="205" rx="5.5" ry="4.2" fill="url(#gSteel)" stroke="#59616b" stroke-width="0.9"/><line x1="240" y1="218" x2="232" y2="218" stroke="#c9ced6" stroke-width="2.4"/><ellipse cx="227" cy="218" rx="5.5" ry="4.2" fill="url(#gSteel)" stroke="#59616b" stroke-width="0.9"/><line x1="272" y1="218" x2="280" y2="218" stroke="#c9ced6" stroke-width="2.4"/><ellipse cx="285" cy="218" rx="5.5" ry="4.2" fill="url(#gSteel)" stroke="#59616b" stroke-width="0.9"/>
