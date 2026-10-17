@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Guitoune logo, favicon and source of the PWA icons: an acoustic guitar seen from the front, held upright, with flowers
+     growing out of the headstock along the axis of the neck, on the page background.
+     The whole drawing is scaled to 88 % so that it stays inside the safe zone of maskable icons.
+     Colours: red / blue / green echo the note-head logo; wood tones are used for the guitar. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <!-- Five-petal flower centred on (0 0), radius 1 unit = 1 px at scale 1; colour comes from `color` -->
+    <g id="flower">
+      <g fill="currentColor">
+        <ellipse cx="0" cy="-17" rx="11" ry="17"/>
+        <ellipse cx="0" cy="-17" rx="11" ry="17" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-17" rx="11" ry="17" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-17" rx="11" ry="17" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-17" rx="11" ry="17" transform="rotate(288)"/>
+      </g>
+      <circle r="9" fill="#ffc107"/>
+    </g>
+    <ellipse id="leaf" cx="0" cy="-12" rx="6" ry="13" fill="#4caf50"/>
+  </defs>
+
+  <rect width="512" height="512" fill="#111111"/>
+
+  <g transform="translate(256 250) scale(0.88) translate(-256 -245)">
+    <!-- Stems: from the top of the headstock to each flower -->
+    <g fill="none" stroke="#4caf50" stroke-width="6" stroke-linecap="round">
+      <path d="M256 134 L256 76"/>
+      <path d="M252 134 C240 118 224 108 208 100"/>
+      <path d="M260 134 C272 118 288 108 304 100"/>
+    </g>
+    <use href="#leaf" transform="translate(246 118) rotate(-40)"/>
+    <use href="#leaf" transform="translate(266 118) rotate(40)"/>
+
+    <!-- Flowers -->
+    <use href="#flower" transform="translate(256 66) scale(1.15)" color="#f44336"/>
+    <use href="#flower" transform="translate(204 98) scale(0.85) rotate(20)" color="#2196f3"/>
+    <use href="#flower" transform="translate(308 98) scale(0.85) rotate(-15)" color="#f5f5f5"/>
+
+    <!-- Neck with frets -->
+    <rect x="241" y="186" width="30" height="120" fill="#4a2c14"/>
+    <g stroke="#c9c9c9" stroke-width="2.5">
+      <line x1="241" y1="214" x2="271" y2="214"/>
+      <line x1="241" y1="240" x2="271" y2="240"/>
+      <line x1="241" y1="264" x2="271" y2="264"/>
+      <line x1="241" y1="286" x2="271" y2="286"/>
+    </g>
+
+    <!-- Headstock with tuning pegs (three per side) -->
+    <path d="M238 186 L238 150 Q238 136 250 136 L262 136 Q274 136 274 150 L274 186 Z" fill="#2b190b"/>
+    <g fill="#d9d9d9">
+      <circle cx="231" cy="148" r="5"/><circle cx="231" cy="162" r="5"/><circle cx="231" cy="176" r="5"/>
+      <circle cx="281" cy="148" r="5"/><circle cx="281" cy="162" r="5"/><circle cx="281" cy="176" r="5"/>
+    </g>
+    <rect x="241" y="184" width="30" height="5" fill="#eeeeee"/>
+
+    <!-- Body: upper bout, waist, lower bout -->
+    <path d="M256 290 C292 290 318 306 318 338 C318 362 302 368 302 382
+             C302 394 346 398 346 430 C346 454 306 466 256 466
+             C206 466 166 454 166 430 C166 398 210 394 210 382
+             C210 368 194 362 194 338 C194 306 220 290 256 290 Z"
+          fill="#d9822b" stroke="#8a4b12" stroke-width="5" stroke-linejoin="round"/>
+    <!-- Neck re-drawn over the body joint -->
+    <rect x="241" y="290" width="30" height="16" fill="#4a2c14"/>
+
+    <!-- Sound hole with rosette, bridge and strings -->
+    <circle cx="256" cy="352" r="27" fill="#2b190b" stroke="#f3d9a8" stroke-width="4"/>
+    <rect x="224" y="418" width="64" height="11" rx="4" fill="#2b190b"/>
+    <g stroke="#f3f3f3" stroke-width="1.6" opacity="0.85">
+      <line x1="245" y1="189" x2="236" y2="420"/>
+      <line x1="249" y1="189" x2="243" y2="420"/>
+      <line x1="253" y1="189" x2="250" y2="420"/>
+      <line x1="259" y1="189" x2="262" y2="420"/>
+      <line x1="263" y1="189" x2="269" y2="420"/>
+      <line x1="267" y1="189" x2="276" y2="420"/>
+    </g>
+  </g>
+</svg>

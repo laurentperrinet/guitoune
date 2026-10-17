@@ -5,16 +5,70 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="description" content="Guitoune: a guitar tuner that runs entirely in your browser, with a real-time waterfall display.">
 <meta name="theme-color" content="#111111">
-<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Guitoune">
 <title>Guitoune: Guitar Tuner</title>
+<script>
+  // Applied before the first paint; the main script validates the name again.
+  try{ const t = localStorage.getItem('guitoune.theme'); if (/^[a-z]+$/.test(t || '')) document.documentElement.dataset.theme = t; }catch(e){}
+</script>
 <style>
+  /* Colour themes: every colour of the page comes from these variables.
+     The dark theme is the default; the others are selected with data-theme on <html>. */
+  :root {
+    --bg: #111;            --canvas-bg: #222;     --text: #eee;
+    --label: #fff;         --label-shadow: rgba(0,0,0,0.9);
+    --border: #555;        --btn-bg: rgba(17,17,17,0.75);   --btn-fg: #aaa;
+    --panel: #1b1b1b;      --field-bg: #111;      --overlay-bg: rgba(17,17,17,0.92);
+    --backdrop: rgba(0,0,0,0.6);
+    --accent: #30d158;     --on-accent: #111;     --warn: #ff8800;     --focus: #fff;
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f4f2;        --canvas-bg: #fff;     --text: #1c1c1e;
+    --label: #1c1c1e;     --label-shadow: rgba(255,255,255,0.9);
+    --border: #b5b5b5;    --btn-bg: rgba(255,255,255,0.85);  --btn-fg: #555;
+    --panel: #fff;        --field-bg: #f0f0ee;   --overlay-bg: rgba(244,244,242,0.94);
+    --backdrop: rgba(0,0,0,0.35);
+    --accent: #1a9e3f;    --on-accent: #fff;     --warn: #d96a00;     --focus: #000;
+  }
+  :root[data-theme="cappuccino"] {
+    --bg: #d9c3a5;        --canvas-bg: #efe2d0;  --text: #3e2a1c;
+    --label: #3e2a1c;     --label-shadow: rgba(250,240,225,0.9);
+    --border: #a8896a;    --btn-bg: rgba(239,226,208,0.88);  --btn-fg: #6b4a32;
+    --panel: #f3e8d8;     --field-bg: #e8d7bf;   --overlay-bg: rgba(217,195,165,0.94);
+    --backdrop: rgba(62,42,28,0.45);
+    --accent: #3f7d2a;    --on-accent: #fff;     --warn: #c4561a;     --focus: #3e2a1c;
+  }
+  :root[data-theme="wood"] {
+    --bg: #2b1b10;        --canvas-bg: #3a2616;  --text: #f0dcc0;
+    --label: #f6e6cc;     --label-shadow: rgba(0,0,0,0.9);
+    --border: #7a5230;    --btn-bg: rgba(43,27,16,0.8);      --btn-fg: #d2a974;
+    --panel: #34210f;     --field-bg: #25160c;   --overlay-bg: rgba(43,27,16,0.93);
+    --backdrop: rgba(0,0,0,0.6);
+    --accent: #9ccc4a;    --on-accent: #25160c;  --warn: #ff9a3c;     --focus: #f6e6cc;
+  }
+  :root[data-theme="ocean"] {
+    --bg: #0a1626;        --canvas-bg: #10243b;  --text: #dbe9f7;
+    --label: #fff;        --label-shadow: rgba(0,0,0,0.9);
+    --border: #3d5f86;    --btn-bg: rgba(10,22,38,0.8);      --btn-fg: #8fb4da;
+    --panel: #0f2038;     --field-bg: #0a1626;   --overlay-bg: rgba(10,22,38,0.93);
+    --backdrop: rgba(0,0,0,0.6);
+    --accent: #2fd6b0;    --on-accent: #08131f;  --warn: #ffa940;     --focus: #fff;
+  }
+
+
   html, body {
     margin: 0;
     padding: 0;
     height: 100%;
     overflow: hidden;
-    background: #111;
-    color: #eee;
+    background: var(--bg);
+    color: var(--text);
     font-family: Arial, Helvetica, sans-serif;
   }
   
@@ -43,7 +97,7 @@
     display: block;
     width: 100%;
     height: 100%;
-    background: #222;
+    background: var(--canvas-bg);
   }
   
   .noteLabel {
@@ -51,12 +105,31 @@
     right: 0.5rem;
     font-size: clamp(1.5rem, 4vw, 2.4rem);
     font-weight: bold;
-    color: #fff;
-    text-shadow: 0 0 6px rgba(0,0,0,0.9);
+    color: var(--label);
+    text-shadow: 0 0 6px var(--label-shadow);
     pointer-events: none;
     z-index: 2;
+    text-align: right;
+    line-height: 1.1;
   }
-  
+
+  /* Direction hint, error in cents and frequency of the string being played */
+  .noteDetail {
+    font-size: clamp(0.75rem, 2.2vw, 1rem);
+    font-weight: normal;
+    white-space: nowrap;
+  }
+
+  /* Text for screen readers only */
+  .srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   /* Start screen: the audio context needs a user gesture (notably on iOS) */
   #startOverlay {
     position: fixed;
@@ -69,7 +142,7 @@
     gap: 1rem;
     padding: 1rem;
     box-sizing: border-box;
-    background: rgba(17, 17, 17, 0.92);
+    background: var(--overlay-bg);
     text-align: center;
   }
 
@@ -84,15 +157,15 @@
     padding: 0.8rem 2.5rem;
     border: 0;
     border-radius: 2rem;
-    background: #30d158;
-    color: #111;
+    background: var(--accent);
+    color: var(--on-accent);
     cursor: pointer;
   }
 
   #startMessage {
     margin: 0;
     max-width: 30rem;
-    color: #ff8800;
+    color: var(--warn);
   }
 
   .stringRow::after {
@@ -102,7 +175,7 @@
     right: 0;
     bottom: 0;
     height: 2px;
-    background: #555;
+    background: var(--border);
   }
   
   .stringRow:last-child::after {
@@ -118,10 +191,10 @@
     width: 48px;
     height: 48px;
     padding: 0;
-    border: 2px solid #555;
+    border: 2px solid var(--border);
     border-radius: 50%;
-    background: rgba(17,17,17,0.75);
-    color: #aaa;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -145,8 +218,8 @@
 
   /* Colour set from JS: green (silence) to red (maximum level) */
   #micButton.listening {
-    border-color: var(--level-colour, #30d158);
-    color: var(--level-colour, #30d158);
+    border-color: var(--level-colour, var(--accent));
+    color: var(--level-colour, var(--accent));
   }
 
   /* Full screen toggle, mirrors the microphone button on the left */
@@ -158,10 +231,10 @@
     width: 48px;
     height: 48px;
     padding: 0;
-    border: 2px solid #555;
+    border: 2px solid var(--border);
     border-radius: 50%;
-    background: rgba(17,17,17,0.75);
-    color: #aaa;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -186,14 +259,143 @@
   #fullscreenButton.active .fsEnter { display: none; }
   #fullscreenButton.active .fsExit { display: block; }
 
+  /* Settings button, next to the full screen one (or in the corner when that one is hidden) */
+  #settingsButton {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: calc(max(12px, env(safe-area-inset-left)) + 56px);
+    z-index: 11;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #fullscreenButton[hidden] ~ #settingsButton {
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  #settingsButton[hidden] { display: none; }
+
+  #settingsButton svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+
+  /* Theme switch, bottom left; a little smaller than the other buttons */
+  #themeButton {
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    z-index: 10;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #themeButton svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  #themeButton .themeHalf { fill: currentColor; }
+
+  #settingsDialog {
+    box-sizing: border-box;
+    width: min(24rem, calc(100vw - 2rem));
+    padding: 1.2rem;
+    border: 2px solid var(--border);
+    border-radius: 1rem;
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  #settingsDialog::backdrop { background: var(--backdrop); }
+
+  #settingsDialog h2 {
+    margin: 0 0 1rem;
+    font-size: 1.2rem;
+  }
+
+  .settingsField {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+  }
+
+  .settingsField.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  #settingsDialog select,
+  #settingsDialog input[type="number"] {
+    font: inherit;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--field-bg);
+    color: var(--text);
+  }
+
+  #settingsDialog input[type="checkbox"] {
+    width: 1.3rem;
+    height: 1.3rem;
+    accent-color: var(--accent);
+  }
+
+  #settingsDone {
+    font: inherit;
+    font-weight: bold;
+    padding: 0.6rem 1.8rem;
+    border: 0;
+    border-radius: 2rem;
+    background: var(--accent);
+    color: var(--on-accent);
+    cursor: pointer;
+  }
+
   /* On short landscape screens, keep the note labels clear of the button */
   @media (max-height: 500px) {
     .noteLabel { right: 4.5rem; }
   }
 
   #micButton:focus-visible,
-  #fullscreenButton:focus-visible {
-    outline: 2px solid #fff;
+  #fullscreenButton:focus-visible,
+  #settingsButton:focus-visible,
+  #themeButton:focus-visible,
+  #settingsDone:focus-visible {
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
 
@@ -228,10 +430,46 @@
     <path class="fsExit" d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/>
   </svg>
 </button>
+<button id="settingsButton" type="button" aria-label="Open settings" aria-haspopup="dialog" title="Settings">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/>
+    <circle cx="16" cy="6" r="2"/>
+    <circle cx="10" cy="12" r="2"/>
+    <circle cx="18" cy="18" r="2"/>
+  </svg>
+</button>
+<button id="themeButton" type="button" aria-label="Change colour theme" title="Colour theme">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="9"/>
+    <path class="themeHalf" d="M12 3a9 9 0 0 1 0 18z"/>
+  </svg>
+</button>
+<dialog id="settingsDialog" aria-labelledby="settingsTitle">
+  <h2 id="settingsTitle">Settings</h2>
+  <div class="settingsField">
+    <label for="tuningSelect">Tuning</label>
+    <select id="tuningSelect"></select>
+  </div>
+  <div class="settingsField">
+    <label for="a4Input">Reference pitch A4 (Hz)</label>
+    <input id="a4Input" type="number" inputmode="numeric" step="1">
+  </div>
+  <div class="settingsField inline">
+    <input id="fineInput" type="checkbox">
+    <label for="fineInput" id="fineLabel"></label>
+  </div>
+  <button id="settingsDone" type="button">Done</button>
+</dialog>
+<div id="liveStatus" class="srOnly" role="status" aria-live="polite"></div>
 <script>
 /*============== CONFIG =================*/
 const DSP_CONFIG = {
-  DISPLAY_CENTS   : 100,
+  DISPLAY_CENTS   : 50,    // half-width of the waterfall (cents)
+  FINE_DISPLAY_CENTS : 15, // half-width of the waterfall in fine mode (cents)
+  CAPTURE_CENTS   : 100,   // a string counts as played within this distance of its pitch (cents)
+  A4_DEFAULT      : 440,   // reference pitch (Hz)
+  A4_MIN          : 415,
+  A4_MAX          : 466,
   COLS            : 35,
   ROWS            : 30,
   UPDATE_INTERVAL : 100,
@@ -248,28 +486,131 @@ const DSP_CONFIG = {
   LEVEL_MAX_DB    : -10    // dBFS mapped to red (maximum)
 };
 
-/*============== GUITAR STRINGS =================*/
-const STRINGS = [
-  {name:'E2', freq: 82.41},
-  {name:'A2', freq:110.00},
-  {name:'D3', freq:146.83},
-  {name:'G3', freq:196.00},
-  {name:'B3', freq:246.94},
-  {name:'E4', freq:329.63}
+/*============== TUNINGS & SETTINGS =================*/
+const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+
+// Strings are MIDI note numbers (A4 = 69), from the lowest to the highest string.
+// Frequencies follow from the reference pitch, so changing A4 retunes every preset.
+const TUNINGS = [
+  {id:'standard', label:'Standard (E A D G B E)',          midi:[40,45,50,55,59,64]},
+  {id:'dropD',    label:'Drop D (D A D G B E)',            midi:[38,45,50,55,59,64]},
+  {id:'halfDown', label:'Half step down (E♭ A♭ D♭ G♭ B♭ E♭)', midi:[39,44,49,54,58,63]},
+  {id:'fullDown', label:'Full step down (D G C F A D)',    midi:[38,43,48,53,57,62]},
+  {id:'dadgad',   label:'DADGAD',                          midi:[38,45,50,55,57,62]},
+  {id:'openG',    label:'Open G (D G D G B D)',            midi:[38,43,50,55,59,62]},
+  {id:'openD',    label:'Open D (D A D F♯ A D)',           midi:[38,45,50,54,57,62]}
 ];
+
+// localStorage can be missing or throw (private windows, blocked site data):
+// the tuner then simply keeps its defaults.
+const SETTINGS_KEY = 'guitoune.settings';
+const settings = {tuning: TUNINGS[0].id, a4: DSP_CONFIG.A4_DEFAULT, fine: false};
+
+function clampA4(hz){
+  return Math.max(DSP_CONFIG.A4_MIN, Math.min(DSP_CONFIG.A4_MAX, Math.round(hz)));
+}
+
+function loadSettings(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {};
+    if (TUNINGS.some(t => t.id === saved.tuning)) settings.tuning = saved.tuning;
+    if (Number.isFinite(saved.a4)) settings.a4 = clampA4(saved.a4);
+    settings.fine = saved.fine === true;
+  }catch(e){ /* keep the defaults */ }
+}
+
+function saveSettings(){
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch(e){ /* not persisted */ }
+}
+
+function midiToFreq(midi){ return settings.a4 * Math.pow(2, (midi - 69) / 12); }
+function midiToName(midi){ return NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1); }
+
+// Half-width of the waterfall (cents) in the current scale
+function displayCents(){
+  return settings.fine ? DSP_CONFIG.FINE_DISPLAY_CENTS : DSP_CONFIG.DISPLAY_CENTS;
+}
+
+/*============== GUITAR STRINGS =================*/
+// Filled in place by applyTuning(), so that every reference to STRINGS stays valid
+const STRINGS = TUNINGS[0].midi.map(() => ({name:'', freq:0}));
+
+function applyTuning(){
+  const tuning = TUNINGS.find(t => t.id === settings.tuning);
+  tuning.midi.forEach((midi, i) => {
+    STRINGS[i].name = midiToName(midi);
+    STRINGS[i].freq = midiToFreq(midi);
+  });
+}
+
+loadSettings();
+applyTuning();
+
+/*============== THEMES =================*/
+// Colours live in the CSS variables above; the canvas reads them back in readPalette().
+// `meta` is the browser toolbar colour (theme-color) for that theme.
+const THEMES = [
+  {id:'dark',       label:'Dark',       meta:'#111111', glow:true},
+  {id:'light',      label:'Light',      meta:'#f4f4f2', glow:false},
+  {id:'cappuccino', label:'Cappuccino', meta:'#d9c3a5', glow:false},
+  {id:'wood',       label:'Wood tones', meta:'#2b1b10', glow:true},
+  {id:'ocean',      label:'Ocean',      meta:'#0a1626', glow:true}
+];
+const THEME_KEY = 'guitoune.theme';
+const themeButton = document.getElementById('themeButton');
+let themeIdx = 0;
+const palette = {canvasBg:'#222', accent:'#30d158', warn:'#ff8800', glow:true};   // canvas colours, see readPalette()
+
+function readPalette(){
+  const css = getComputedStyle(document.documentElement);
+  palette.canvasBg = css.getPropertyValue('--canvas-bg').trim();
+  palette.accent = css.getPropertyValue('--accent').trim();
+  palette.warn = css.getPropertyValue('--warn').trim();
+  palette.glow = THEMES[themeIdx].glow;
+}
+
+function applyTheme(){
+  const theme = THEMES[themeIdx];
+  document.documentElement.dataset.theme = theme.id;
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', theme.meta);
+  themeButton.title = `Colour theme: ${theme.label}`;
+  themeButton.setAttribute('aria-label', `Colour theme: ${theme.label}. Activate for the next one`);
+  readPalette();
+}
+
+function loadTheme(){
+  try{
+    const i = THEMES.findIndex(t => t.id === localStorage.getItem(THEME_KEY));
+    if (i >= 0) themeIdx = i;
+  }catch(e){ /* keep the default */ }
+}
+
+themeButton.addEventListener('click', () => {
+  themeIdx = (themeIdx + 1) % THEMES.length;
+  applyTheme();
+  try{ localStorage.setItem(THEME_KEY, THEMES[themeIdx].id); }catch(e){ /* not persisted */ }
+  draw();
+});
+
+loadTheme();
+applyTheme();
 
 /*============== UI SETUP =================*/
 const container = document.getElementById('tunerContainer');
 const canvases = [];
-const noteLabels = [];
+const noteLabels = [];    // note name of each row
+const noteDetails = [];   // direction hint, cents and Hz under the note name
 
 STRINGS.forEach(s => {
   const row = document.createElement('div');
   row.className = 'stringRow';
-  row.innerHTML = `<canvas></canvas><div class="noteLabel">${s.name}</div>`;
+  // The waterfall is decorative: the same information is given as text in the label
+  row.innerHTML = `<canvas aria-hidden="true"></canvas>
+    <div class="noteLabel"><div class="noteName">${s.name}</div><div class="noteDetail"></div></div>`;
   container.appendChild(row);
   canvases.push(row.querySelector('canvas'));
-  noteLabels.push(row.querySelector('.noteLabel'));
+  noteLabels.push(row.querySelector('.noteName'));
+  noteDetails.push(row.querySelector('.noteDetail'));
 });
 
 /*============== AUDIO =================*/
@@ -282,12 +623,14 @@ let timeBuf = null;     // reused for every analysis to avoid allocating 32 kB t
 let pixelRatio = 1;     // canvas pixels per CSS pixel, so that Retina screens stay sharp
 let lastUpdate = 0;
 let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
-let lastActiveIdx = -1;
 
 const micButton = document.getElementById('micButton');
 const startOverlay = document.getElementById('startOverlay');
 const startButton = document.getElementById('startButton');
 const startMessage = document.getElementById('startMessage');
+const liveStatus = document.getElementById('liveStatus');
+let lastAnnouncement = '';   // last sentence given to screen readers
+let lastAnnounceTime = -Infinity;   // its time stamp (ms): the first sentence is never delayed
 
 let targetLevel = 0;    // 0..1, measured every update interval
 let displayLevel = 0;   // 0..1, smoothed every frame (fast attack, slow decay)
@@ -311,6 +654,42 @@ function setMicState(on){
   micButton.classList.toggle('listening', on);
   micButton.setAttribute('aria-pressed', String(on));
   micButton.setAttribute('aria-label', on ? 'Turn microphone off' : 'Turn microphone on');
+}
+
+function setLabel(idx, name, colour, detail){
+  noteLabels[idx].textContent = name;
+  noteLabels[idx].style.color = colour;
+  noteDetails[idx].textContent = detail;
+  noteDetails[idx].style.color = colour;
+}
+
+// Clear the waterfalls and labels so that a stale reading is not left on screen
+// (when the microphone stops, or when a setting changes the meaning of the columns)
+function resetDisplay(){
+  histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
+  lastAnnouncement = '';
+  STRINGS.forEach((s, idx) => setLabel(idx, s.name, 'var(--label)', ''));
+  draw();
+}
+
+// "↑" asks to raise the pitch (tighten the string), "↓" to lower it, "✓" means in tune
+function formatReadout(cents, freq, inTune){
+  const rounded = Math.round(cents);
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '±';
+  const hint = inTune ? '✓' : (cents < 0 ? '↑' : '↓');
+  return `${hint} ${sign}${Math.abs(rounded)} ¢ · ${freq.toFixed(1)} Hz`;
+}
+
+// Screen readers hear a short sentence when the state changes, at most every 1.5 s
+function announce(idx, cents, inTune, now){
+  const state = inTune
+    ? 'in tune'
+    : `${Math.round(Math.abs(cents) / 5) * 5} cents ${cents < 0 ? 'flat' : 'sharp'}`;
+  const message = `${STRINGS[idx].name}, ${state}`;
+  if (message === lastAnnouncement || now - lastAnnounceTime < 1500) return;
+  lastAnnouncement = message;
+  lastAnnounceTime = now;
+  liveStatus.textContent = message;
 }
 
 /*============== START / STOP =================*/
@@ -414,16 +793,9 @@ function stopTuner(){
   audioCtx = analyser = source = hp = lp = null;
   releaseWakeLock();
 
-  // Clear the waterfalls and labels so that a stale reading is not left on screen
-  histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
-  lastActiveIdx = -1;
-  STRINGS.forEach((s, idx) => {
-    noteLabels[idx].textContent = s.name;
-    noteLabels[idx].style.color = '#fff';
-  });
+  resetDisplay();
   targetLevel = displayLevel = 0;
   micButton.style.removeProperty('--level-colour');
-  draw();
   setMicState(false);
 }
 
@@ -462,6 +834,69 @@ fullscreenButton.addEventListener('click', () => {
 // Also fires when the user leaves with Esc, so the icon always matches the real state
 document.addEventListener('fullscreenchange', updateFullscreenButton);
 document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+
+/*============== SETTINGS UI =================*/
+const settingsButton = document.getElementById('settingsButton');
+const settingsDialog = document.getElementById('settingsDialog');
+const tuningSelect = document.getElementById('tuningSelect');
+const a4Input = document.getElementById('a4Input');
+const fineInput = document.getElementById('fineInput');
+
+// <dialog> is missing from very old browsers: hide the button rather than break the page
+if (typeof settingsDialog.showModal !== 'function') settingsButton.hidden = true;
+
+TUNINGS.forEach(t => tuningSelect.add(new Option(t.label, t.id)));
+a4Input.min = DSP_CONFIG.A4_MIN;
+a4Input.max = DSP_CONFIG.A4_MAX;
+document.getElementById('fineLabel').textContent =
+  `Fine scale (±${DSP_CONFIG.FINE_DISPLAY_CENTS} cents instead of ±${DSP_CONFIG.DISPLAY_CENTS})`;
+
+function syncSettingsControls(){
+  tuningSelect.value = settings.tuning;
+  a4Input.value = settings.a4;
+  fineInput.checked = settings.fine;
+}
+
+// Strings and columns change meaning, so the history is cleared along with the labels
+function settingsChanged(){
+  applyTuning();
+  saveSettings();
+  resetDisplay();
+}
+
+tuningSelect.addEventListener('change', () => {
+  settings.tuning = tuningSelect.value;
+  settingsChanged();
+});
+
+a4Input.addEventListener('change', () => {
+  const hz = parseFloat(a4Input.value);
+  if (Number.isFinite(hz)) settings.a4 = clampA4(hz);
+  a4Input.value = settings.a4;   // shows the value actually used
+  settingsChanged();
+});
+
+fineInput.addEventListener('change', () => {
+  settings.fine = fineInput.checked;
+  settingsChanged();
+});
+
+settingsButton.addEventListener('click', () => {
+  syncSettingsControls();
+  settingsDialog.showModal();
+});
+
+document.getElementById('settingsDone').addEventListener('click', () => settingsDialog.close());
+
+// A click on the backdrop reports the dialog itself as target, but so does a click on its padding:
+// only close when the pointer is really outside the box.
+settingsDialog.addEventListener('click', e => {
+  if (e.target !== settingsDialog) return;
+  const box = settingsDialog.getBoundingClientRect();
+  const outside = e.clientX < box.left || e.clientX > box.right ||
+                  e.clientY < box.top  || e.clientY > box.bottom;
+  if (outside) settingsDialog.close();
+});
 
 // Save battery while the page is in the background. Only the audio graph is suspended:
 // the stream stays open, so the microphone permission is kept and the indicator stays on.
@@ -562,8 +997,7 @@ function autoCorrelate(buf, sampleRate) {
 
   return {
     freq: sampleRate / bestLag,
-    correlation: bestCorr,
-    rms: rms
+    correlation: bestCorr
   };
 }
 
@@ -580,34 +1014,25 @@ function autocorrAt(buf, lag) {
 
 /*============== HELPERS =================*/
 function hueFromCents(c){
-  const max = DSP_CONFIG.DISPLAY_CENTS;
+  const max = displayCents();
   const lim = Math.max(-max, Math.min(max, c));
   return lim < 0 ? 120 * (1 + lim/max) : 120 + 120 * (lim/max);
 }
 
-function centsToCol(cents){
-  const step = (2*DSP_CONFIG.DISPLAY_CENTS) / (DSP_CONFIG.COLS-1);
-  let col = Math.round((cents + DSP_CONFIG.DISPLAY_CENTS) / step);
-  return Math.max(0, Math.min(DSP_CONFIG.COLS-1, col));
-}
-
 function centsToX(cents, canvas){
   const half = canvas.width/2;
-  const pxPerCent = half / DSP_CONFIG.DISPLAY_CENTS;
+  const pxPerCent = half / displayCents();
   return Math.max(0, Math.min(canvas.width-1, Math.round(half + cents*pxPerCent)));
 }
 
 function noteNameFromFreq(freq){
-  const noteNames = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
-  const midi = Math.round(69 + 12 * Math.log2(freq/440));
-  const noteIndex = (midi % 12 + 12) % 12;
-  const octave = Math.floor(midi / 12) - 1;
-  return noteNames[noteIndex] + octave;
+  return midiToName(Math.round(69 + 12 * Math.log2(freq / settings.a4)));
 }
 
 /*============== MAIN LOOP =================*/
 function mainLoop(timestamp){
-  // The waterfall only changes at each analysis, so the canvases are only redrawn then
+  // The trace glides continuously between two analyses, so the canvases are redrawn
+  // every frame while it is visible, and only at each analysis otherwise
   let updated = false;
   if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
     const buf = timeBuf;
@@ -632,34 +1057,33 @@ function mainLoop(timestamp){
         }
       });
 
-      if (minCents > DSP_CONFIG.DISPLAY_CENTS) activeIdx = -1;
+      if (minCents > DSP_CONFIG.CAPTURE_CENTS) activeIdx = -1;
     }
-
-    lastActiveIdx = activeIdx;
 
     // Update labels: green only when the string is actually in tune, orange when merely identified
     STRINGS.forEach((s, idx) => {
       if (idx === activeIdx && detection) {
-        noteLabels[idx].textContent = noteNameFromFreq(detection.freq);
-        noteLabels[idx].style.color =
-          Math.abs(centsArray[idx]) <= DSP_CONFIG.IN_TUNE_CENTS ? '#0f0' : '#ff8800';
+        const cents = centsArray[idx];
+        const inTune = Math.abs(cents) <= DSP_CONFIG.IN_TUNE_CENTS;
+        setLabel(idx, noteNameFromFreq(detection.freq), inTune ? 'var(--accent)' : 'var(--warn)',
+                 formatReadout(cents, detection.freq, inTune));
+        announce(idx, cents, inTune, timestamp);
       } else {
-        noteLabels[idx].textContent = s.name;
-        noteLabels[idx].style.color = '#fff';
+        setLabel(idx, s.name, 'var(--label)', '');
       }
     });
 
     // Update history
     STRINGS.forEach((s, idx) => {
       let entry = null;
-      if (detection) {
+      // Off-scale readings on the other strings would only pile up on the edges
+      if (detection && (idx === activeIdx || Math.abs(centsArray[idx]) <= displayCents())) {
         const cents = centsArray[idx];
-        const col = centsToCol(cents);
         const hue = hueFromCents(cents);
         const corr = detection.correlation;
         const light = 10 + 80 * corr;
         const alpha = activeIdx === idx ? corr : corr * 0.5;
-        entry = {col, hue, light, alpha};
+        entry = {cents: Math.max(-displayCents(), Math.min(displayCents(), cents)), hue, light, alpha};
       }
       histories[idx].push(entry);
       if (histories[idx].length > DSP_CONFIG.ROWS) histories[idx].shift();
@@ -670,36 +1094,104 @@ function mainLoop(timestamp){
   }
 
   updateMicColour();
-  if (updated) draw();
+  if (updated || histories.some(h => h.some(Boolean))) draw(timestamp);
   rafId = requestAnimationFrame(mainLoop);
 }
 
 /*============== DRAW =================*/
-function draw(){
+// The pitch history is drawn as a continuous ribbon rather than as cells:
+// - it glides upwards with the time elapsed since the last analysis (`frac`, 0..1);
+// - each segment is a vertical gradient between the hues of two successive readings;
+// - a wide faint pass under a narrow bright one gives a halo (no shadowBlur, which is slow);
+// - on dark themes the passes are added ('lighter') so that overlaps light up;
+// - the trace fades out towards the top, where the oldest readings are.
+function drawTrace(ctx, canvas, history, frac){
+  const W = canvas.width, H = canvas.height;
+  const rowH = H / DSP_CONFIG.ROWS;
+  const colW = W / DSP_CONFIG.COLS;
+  const pxPerCent = (W / 2) / displayCents();
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalCompositeOperation = palette.glow ? 'lighter' : 'source-over';
+
+  let prev = null;
+  history.forEach((entry, i) => {
+    if (!entry){ prev = null; return; }
+    // The newest row starts one row below the canvas and rises into view
+    const y = (i + 1 - frac) * rowH + rowH / 2;
+    const x = W / 2 + entry.cents * pxPerCent;
+    const age = Math.max(0, Math.min(1, y / H));      // 0 at the top (old) .. 1 at the bottom (new)
+    const alpha = entry.alpha * (0.1 + 0.9 * age * age);
+    // Full lightness would wash out on a pale background
+    const light = palette.glow ? entry.light : Math.min(entry.light, 50);
+    const colour = `hsl(${entry.hue},100%,${light}%)`;
+
+    if (prev){
+      // Two readings are never on the same row, so the gradient axis is never degenerate
+      const grad = ctx.createLinearGradient(0, prev.y, 0, y);
+      grad.addColorStop(0, prev.colour);
+      grad.addColorStop(1, colour);
+      ctx.strokeStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(x, y);
+      ctx.globalAlpha = alpha * 0.2;
+      ctx.lineWidth = colW * 3.2;
+      ctx.stroke();
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = colW * 1.1;
+      ctx.stroke();
+    } else {
+      // Isolated reading: a soft dot
+      ctx.fillStyle = colour;
+      ctx.globalAlpha = alpha * 0.2;
+      ctx.beginPath();
+      ctx.arc(x, y, colW * 1.6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(x, y, colW * 0.55, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    prev = {x, y, colour};
+  });
+
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// `now` is the frame time stamp (ms); without it the trace is drawn at rest, on its rows
+function draw(now){
+  const frac = now === undefined ? 1 : Math.max(0, Math.min(1, (now - lastUpdate) / DSP_CONFIG.UPDATE_INTERVAL));
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     if (!canvas || canvas.width === 0) return;
 
     const ctx = canvas.getContext('2d');
-    const colW = canvas.width / DSP_CONFIG.COLS;
-    const rowH = canvas.height / DSP_CONFIG.ROWS;
 
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = palette.canvasBg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Guide lines
     const centreX = canvas.width/2;
-    const leftX = centsToX(-10, canvas);
-    const rightX = centsToX(10, canvas);
+    const leftX = centsToX(-DSP_CONFIG.IN_TUNE_CENTS, canvas);
+    const rightX = centsToX(DSP_CONFIG.IN_TUNE_CENTS, canvas);
 
-    ctx.strokeStyle = '#30d158';
+    // The in-tune zone is faintly lit
+    ctx.fillStyle = palette.accent;
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(leftX, 0, rightX - leftX, canvas.height);
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = palette.accent;
     ctx.lineWidth = 2 * pixelRatio;
     ctx.beginPath();
     ctx.moveTo(centreX, 0);
     ctx.lineTo(centreX, canvas.height);
     ctx.stroke();
 
-    ctx.strokeStyle = '#ff8800';
+    ctx.strokeStyle = palette.warn;
     ctx.lineWidth = pixelRatio;
     ctx.beginPath();
     ctx.moveTo(leftX, 0);
@@ -708,14 +1200,7 @@ function draw(){
     ctx.lineTo(rightX, canvas.height);
     ctx.stroke();
 
-    // Waterfall
-    histories[idx].forEach((entry, rowIdx) => {
-      if (!entry) return;
-      ctx.fillStyle = `hsl(${entry.hue},100%,${entry.light}%)`;
-      ctx.globalAlpha = entry.alpha;
-      ctx.fillRect(entry.col * colW, rowIdx * rowH, colW, rowH);
-    });
-    ctx.globalAlpha = 1;
+    drawTrace(ctx, canvas, histories[idx], frac);
   });
 }
 
@@ -723,6 +1208,14 @@ function draw(){
 // No automatic start: the microphone and audio context need a user gesture.
 // The observer above has already drawn the empty guides behind the start screen.
 resizeCanvases();
+
+// Offline use and installation. Service workers need https (or localhost) and are optional:
+// the tuner works the same without one.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
