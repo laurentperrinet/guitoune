@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1158" width="2000" height="1158" role="img" aria-labelledby="t d">
+<title id="t">How to use Guitoune</title>
+<desc id="d">Guitoune tuner display with six string lanes (E2 to E4). The detected string is highlighted in green. The three vertical bars mark the tolerance window: minus 10 cents, correct, plus 10 cents. Six arrows link the lanes to the six guitar strings, from low pitch (top) to high pitch (bottom).</desc>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<defs><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="60.0" y1="0.0" x2="560.0" y2="0.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="62.0" y1="0.0" x2="600.0" y2="0.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g3" gradientUnits="userSpaceOnUse" x1="60.0" y1="0.0" x2="540.0" y2="0.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#23924a"/></linearGradient><linearGradient id="g4" gradientUnits="userSpaceOnUse" x1="560.0" y1="0.0" x2="996.0" y2="0.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#5fd068"/></linearGradient><linearGradient id="g5" gradientUnits="userSpaceOnUse" x1="372.0" y1="836.0" x2="977.0" y2="700.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#f0a030"/></linearGradient><linearGradient id="g6" gradientUnits="userSpaceOnUse" x1="372.0" y1="966.0" x2="1011.0" y2="800.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#5fd068"/></linearGradient><linearGradient id="g7" gradientUnits="userSpaceOnUse" x1="372.0" y1="1096.0" x2="1046.0" y2="900.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#f0a030"/></linearGradient><linearGradient id="g8" gradientUnits="userSpaceOnUse" x1="1404.0" y1="0.0" x2="1572.0" y2="0.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g9" gradientUnits="userSpaceOnUse" x1="1404.0" y1="0.0" x2="1572.0" y2="0.0"><stop offset="0" stop-color="#954ed0"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g10" gradientUnits="userSpaceOnUse" x1="1404.0" y1="0.0" x2="1572.0" y2="0.0"><stop offset="0" stop-color="#bc47af"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g11" gradientUnits="userSpaceOnUse" x1="1404.0" y1="0.0" x2="1572.0" y2="0.0"><stop offset="0" stop-color="#d65285"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g12" gradientUnits="userSpaceOnUse" x1="1404.0" y1="0.0" x2="1572.0" y2="0.0"><stop offset="0" stop-color="#e26e50"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g13" gradientUnits="userSpaceOnUse" x1="1404.0" y1="0.0" x2="1572.0" y2="0.0"><stop offset="0" stop-color="#ee8a1c"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g14" gradientUnits="userSpaceOnUse" x1="0.0" y1="392.0" x2="0.0" y2="766.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="0.5" stop-color="#d0449f"/><stop offset="1" stop-color="#ee8a1c"/></linearGradient><linearGradient id="g15" gradientUnits="userSpaceOnUse" x1="1616.0" y1="0.0" x2="1906.0" y2="0.0"><stop offset="0" stop-color="#8a45c0"/><stop offset="1" stop-color="#d0449f"/></linearGradient><linearGradient id="g16" gradientUnits="userSpaceOnUse" x1="0.0" y1="164.0" x2="0.0" y2="968.0"><stop offset="0" stop-color="#6d55f0"/><stop offset="0.5" stop-color="#d0449f"/><stop offset="1" stop-color="#ee8a1c"/></linearGradient></defs>
+<rect x="666" y="0" width="692" height="1158" fill="#222222"/>
+<line x1="666" y1="188" x2="1358" y2="188" stroke="#5a5a5a" stroke-width="1.5"/>
+<line x1="666" y1="382" x2="1358" y2="382" stroke="#5a5a5a" stroke-width="1.5"/>
+<line x1="666" y1="576" x2="1358" y2="576" stroke="#5a5a5a" stroke-width="1.5"/>
+<line x1="666" y1="770" x2="1358" y2="770" stroke="#5a5a5a" stroke-width="1.5"/>
+<line x1="666" y1="964" x2="1358" y2="964" stroke="#5a5a5a" stroke-width="1.5"/>
+<line x1="977" y1="0" x2="977" y2="1158" stroke="#c9701c" stroke-width="2.5"/>
+<line x1="1046" y1="0" x2="1046" y2="1158" stroke="#c9701c" stroke-width="2.5"/>
+<line x1="1011" y1="0" x2="1011" y2="1158" stroke="#4fbf5a" stroke-width="2.5"/>
+<g fill="#6c6ca8" opacity="0.85"><rect x="1338" y="10" width="20" height="168"/><rect x="1338" y="204" width="20" height="166"/></g>
+<g fill="#2e2e8a" opacity="0.9"><rect x="1338" y="120" width="20" height="6"/><rect x="1338" y="136" width="20" height="4"/><rect x="1338" y="150" width="20" height="8"/><rect x="1338" y="312" width="20" height="8"/><rect x="1338" y="326" width="20" height="5"/></g>
+<g fill="#8c5c5c" opacity="0.85"><rect x="666" y="590" width="20" height="168"/><rect x="666" y="783" width="20" height="167"/><rect x="666" y="977" width="20" height="168"/></g>
+<g fill="#5a1818" opacity="0.9"><rect x="666" y="702" width="20" height="6"/><rect x="666" y="718" width="20" height="5"/><rect x="666" y="892" width="20" height="8"/><rect x="666" y="906" width="20" height="5"/><rect x="666" y="1100" width="20" height="9"/><rect x="666" y="1114" width="20" height="5"/></g>
+<g fill="#c4eebc"><rect x="1022" y="397" width="19" height="70"/><rect x="1002" y="467" width="20" height="26"/></g>
+<g fill="#9fdc98"><rect x="1022" y="493" width="19" height="13"/><rect x="1022" y="506" width="19" height="12" opacity="0.7"/><rect x="1022" y="539" width="19" height="12"/><rect x="1002" y="551" width="20" height="13"/><rect x="1002" y="533" width="20" height="6" opacity="0.8"/></g>
+<g fill="#4fbf5a"><rect x="982" y="519" width="20" height="4"/><rect x="1061" y="526" width="20" height="4"/></g>
+<g fill="#ffffff" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" text-anchor="middle"><text x="1335" y="103">E2</text><text x="1335" y="294">A2</text><text x="1335" y="488">D3</text><text x="1335" y="682">G3</text><text x="1335" y="876">B3</text><text x="1335" y="1070">E4</text></g>
+<g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700" font-size="78" fill="#2b2b3a"><text x="58" y="104">How to use</text><text x="58" y="190" fill="url(#g1)">Guitoune?</text></g>
+<line x1="62" y1="226" x2="600" y2="226" stroke="url(#g2)" stroke-width="7" stroke-linecap="round"/>
+<text x="60" y="278" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="30" fill="#5c5c6b">Play a string and read the display.</text>
+<text x="58" y="501" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700" font-size="60" fill="url(#g3)">Detected string</text>
+<g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="28" fill="#5c5c6b"><text x="60" y="547">The closest string is highlighted</text><text x="60" y="581">in green, in its own lane.</text></g>
+<line x1="560" y1="481" x2="958.0" y2="481" stroke="url(#g4)" stroke-width="10" stroke-linecap="round"/>
+<polygon points="996.0,481.0 958.0,500.0 958.0,462.0" fill="#5fd068" stroke="#5fd068" stroke-width="2" stroke-linejoin="round"/>
+<path d="M372.0 836.0 C602.0 836.0 743.9 823.9 947.0 716.0" fill="none" stroke="url(#g5)" stroke-width="10" stroke-linecap="round"/>
+<polygon points="977.0,700.0 955.0,731.0 939.0,701.0" fill="#f0a030" stroke="#f0a030" stroke-width="2" stroke-linejoin="round"/>
+<g text-anchor="end" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif"><text x="350" y="834" font-weight="700" font-size="46" fill="#2b2b3a">−10 cents</text><text x="350" y="868" font-size="26" fill="#5c5c6b">Lower tolerance bound</text></g>
+<path d="M372.0 966.0 C602.0 966.0 777.9 923.9 981.0 816.0" fill="none" stroke="url(#g6)" stroke-width="10" stroke-linecap="round"/>
+<polygon points="1011.0,800.0 989.0,831.0 973.0,801.0" fill="#5fd068" stroke="#5fd068" stroke-width="2" stroke-linejoin="round"/>
+<g text-anchor="end" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif"><text x="350" y="964" font-weight="700" font-size="46" fill="#2b2b3a">Correct</text><text x="350" y="998" font-size="26" fill="#5c5c6b">Pitch matches the note</text></g>
+<path d="M372.0 1096.0 C602.0 1096.0 812.9 1023.9 1016.0 916.0" fill="none" stroke="url(#g7)" stroke-width="10" stroke-linecap="round"/>
+<polygon points="1046.0,900.0 1024.0,931.0 1008.0,901.0" fill="#f0a030" stroke="#f0a030" stroke-width="2" stroke-linejoin="round"/>
+<g text-anchor="end" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif"><text x="350" y="1094" font-weight="700" font-size="46" fill="#2b2b3a">+10 cents</text><text x="350" y="1128" font-size="26" fill="#5c5c6b">Upper tolerance bound</text></g>
+<path d="M1404 94.0 C1471.0 94.0 1471.0 404.0 1538.0 404.0" fill="none" stroke="url(#g8)" stroke-width="9" stroke-linecap="round"/>
+<polygon points="1572.0,404.0 1538.0,421.0 1538.0,387.0" fill="#d0449f" stroke="#d0449f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="1388" cy="94.0" r="13" fill="#6d55f0"/><circle cx="1388" cy="94.0" r="5" fill="#ffffff"/>
+<path d="M1404 285.0 C1471.0 285.0 1471.0 474.0 1538.0 474.0" fill="none" stroke="url(#g9)" stroke-width="9" stroke-linecap="round"/>
+<polygon points="1572.0,474.0 1538.0,491.0 1538.0,457.0" fill="#d0449f" stroke="#d0449f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="1388" cy="285.0" r="13" fill="#954ed0"/><circle cx="1388" cy="285.0" r="5" fill="#ffffff"/>
+<path d="M1404 479.0 C1471.0 479.0 1471.0 544.0 1538.0 544.0" fill="none" stroke="url(#g10)" stroke-width="9" stroke-linecap="round"/>
+<polygon points="1572.0,544.0 1538.0,561.0 1538.0,527.0" fill="#d0449f" stroke="#d0449f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="1388" cy="479.0" r="13" fill="#bc47af"/><circle cx="1388" cy="479.0" r="5" fill="#ffffff"/>
+<path d="M1404 673.0 C1471.0 673.0 1471.0 614.0 1538.0 614.0" fill="none" stroke="url(#g11)" stroke-width="9" stroke-linecap="round"/>
+<polygon points="1572.0,614.0 1538.0,631.0 1538.0,597.0" fill="#d0449f" stroke="#d0449f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="1388" cy="673.0" r="13" fill="#d65285"/><circle cx="1388" cy="673.0" r="5" fill="#ffffff"/>
+<path d="M1404 867.0 C1471.0 867.0 1471.0 684.0 1538.0 684.0" fill="none" stroke="url(#g12)" stroke-width="9" stroke-linecap="round"/>
+<polygon points="1572.0,684.0 1538.0,701.0 1538.0,667.0" fill="#d0449f" stroke="#d0449f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="1388" cy="867.0" r="13" fill="#e26e50"/><circle cx="1388" cy="867.0" r="5" fill="#ffffff"/>
+<path d="M1404 1061.0 C1471.0 1061.0 1471.0 754.0 1538.0 754.0" fill="none" stroke="url(#g13)" stroke-width="9" stroke-linecap="round"/>
+<polygon points="1572.0,754.0 1538.0,771.0 1538.0,737.0" fill="#d0449f" stroke="#d0449f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="1388" cy="1061.0" r="13" fill="#ee8a1c"/><circle cx="1388" cy="1061.0" r="5" fill="#ffffff"/>
+<path d="M1580 392.0 Q1590 392.0 1590 402.0 L1590 756.0 Q1590 766.0 1580 766.0" fill="none" stroke="url(#g14)" stroke-width="6" stroke-linecap="round"/>
+<g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif"><text x="1616" y="552" font-size="38" fill="#2b2b3a">Your guitar’s</text><text x="1616" y="616" font-size="52" font-weight="700" fill="url(#g15)">six strings</text><text x="1616" y="658" font-size="25" fill="#5c5c6b">E2 to E4, top to bottom</text></g>
+<line x1="1925" y1="210.0" x2="1925" y2="922.0" stroke="url(#g16)" stroke-width="14" stroke-linecap="round"/>
+<polygon points="1925.0,164.0 1949.0,210.0 1901.0,210.0" fill="#6d55f0" stroke="#6d55f0" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="1925.0,968.0 1901.0,922.0 1949.0,922.0" fill="#ee8a1c" stroke="#ee8a1c" stroke-width="2" stroke-linejoin="round"/>
+<g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700" font-size="52" text-anchor="middle"><g fill="#6d55f0"><text x="1925" y="74">low</text><text x="1925" y="128">pitch</text></g><g fill="#ee8a1c"><text x="1925" y="1048">high</text><text x="1925" y="1102">pitch</text></g></g>
+</svg>
