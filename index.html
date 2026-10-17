@@ -149,12 +149,50 @@
     color: var(--level-colour, #30d158);
   }
 
+  /* Full screen toggle, mirrors the microphone button on the left */
+  #fullscreenButton {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    z-index: 10;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid #555;
+    border-radius: 50%;
+    background: rgba(17,17,17,0.75);
+    color: #aaa;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #fullscreenButton[hidden] { display: none; }
+
+  #fullscreenButton svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Corners point outwards to enter, inwards to exit */
+  #fullscreenButton .fsExit { display: none; }
+  #fullscreenButton.active .fsEnter { display: none; }
+  #fullscreenButton.active .fsExit { display: block; }
+
   /* On short landscape screens, keep the note labels clear of the button */
   @media (max-height: 500px) {
     .noteLabel { right: 4.5rem; }
   }
 
-  #micButton:focus-visible {
+  #micButton:focus-visible,
+  #fullscreenButton:focus-visible {
     outline: 2px solid #fff;
     outline-offset: 2px;
   }
@@ -182,6 +220,12 @@
     <rect x="9" y="2" width="6" height="12" rx="3"/>
     <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>
     <line class="micSlash" x1="3" y1="3" x2="21" y2="21"/>
+  </svg>
+</button>
+<button id="fullscreenButton" type="button" aria-label="Enter full screen" aria-pressed="false" title="Full screen" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path class="fsEnter" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
+    <path class="fsExit" d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/>
   </svg>
 </button>
 <script>
@@ -387,6 +431,37 @@ micButton.addEventListener('click', () => {
   if (stream) stopTuner(); else startTuner();
 });
 startButton.addEventListener('click', startTuner);
+
+// Fullscreen toggle. Safari only exposes the prefixed API, and iPhone Safari has none
+// at all, so the button stays hidden when the page cannot be made fullscreen.
+const fullscreenButton = document.getElementById('fullscreenButton');
+const rootEl = document.documentElement;
+const canFullscreen = !!(rootEl.requestFullscreen || rootEl.webkitRequestFullscreen);
+fullscreenButton.hidden = !canFullscreen;
+
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function updateFullscreenButton(){
+  const on = isFullscreen();
+  fullscreenButton.classList.toggle('active', on);
+  fullscreenButton.setAttribute('aria-pressed', String(on));
+  fullscreenButton.setAttribute('aria-label', on ? 'Exit full screen' : 'Enter full screen');
+}
+
+fullscreenButton.addEventListener('click', () => {
+  // requestFullscreen() rejects (e.g. denied by the browser): nothing to do but stay windowed
+  if (isFullscreen()){
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    const result = (rootEl.requestFullscreen || rootEl.webkitRequestFullscreen).call(rootEl);
+    if (result && result.catch) result.catch(() => {});
+  }
+});
+// Also fires when the user leaves with Esc, so the icon always matches the real state
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
 
 // Save battery and release the microphone indicator while the page is in the background
 document.addEventListener('visibilitychange', () => {
