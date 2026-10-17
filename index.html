@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Guitoune: a guitar tuner that runs entirely in your browser, with a real-time waterfall display.">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <title>Guitoune: Guitar Tuner</title>
 <style>
   html, body {
@@ -54,6 +57,44 @@
     z-index: 2;
   }
   
+  /* Start screen: the audio context needs a user gesture (notably on iOS) */
+  #startOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    box-sizing: border-box;
+    background: rgba(17, 17, 17, 0.92);
+    text-align: center;
+  }
+
+  #startOverlay[hidden] {
+    display: none;
+  }
+
+  #startButton {
+    font: inherit;
+    font-size: 1.5rem;
+    font-weight: bold;
+    padding: 0.8rem 2.5rem;
+    border: 0;
+    border-radius: 2rem;
+    background: #30d158;
+    color: #111;
+    cursor: pointer;
+  }
+
+  #startMessage {
+    margin: 0;
+    max-width: 30rem;
+    color: #ff8800;
+  }
+
   .stringRow::after {
     content: "";
     position: absolute;
@@ -68,6 +109,56 @@
     display: none;
   }
   
+  /* Microphone toggle, floating above the string rows */
+  #micButton {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 10;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid #555;
+    border-radius: 50%;
+    background: rgba(17,17,17,0.75);
+    color: #aaa;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #micButton svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Diagonal slash only shown when the microphone is off */
+  #micButton .micSlash { display: block; }
+  #micButton.listening .micSlash { display: none; }
+
+  /* Colour set from JS: green (silence) to red (maximum level) */
+  #micButton.listening {
+    border-color: var(--level-colour, #30d158);
+    color: var(--level-colour, #30d158);
+  }
+
+  /* On short landscape screens, keep the note labels clear of the button */
+  @media (max-height: 500px) {
+    .noteLabel { right: 4.5rem; }
+  }
+
+  #micButton:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
   /* Safe area handling for mobile devices */
   @supports(padding: max(0px)) {
     .stringRow:first-child {
@@ -82,6 +173,17 @@
 </head>
 <body>
 <div id="tunerContainer"></div>
+<div id="startOverlay">
+  <button id="startButton" type="button">Start tuner</button>
+  <p id="startMessage" role="alert" aria-live="assertive"></p>
+</div>
+<button id="micButton" type="button" aria-label="Turn microphone on" aria-pressed="false" title="Microphone">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="9" y="2" width="6" height="12" rx="3"/>
+    <path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>
+    <line class="micSlash" x1="3" y1="3" x2="21" y2="21"/>
+  </svg>
+</button>
 <script>
 /*============== CONFIG =================*/
 const DSP_CONFIG = {
@@ -96,7 +198,10 @@ const DSP_CONFIG = {
   RMS_THRESHOLD   : 0.005,
   CORRELATION_MIN : 0.4,
   MIN_FREQ        : 50,
-  MAX_FREQ        : 1000
+  MAX_FREQ        : 1000,
+  IN_TUNE_CENTS   : 10,    // |error| below which a string counts as tuned (matches the orange guides)
+  LEVEL_MIN_DB   : -60,   // dBFS mapped to green (silence)
+  LEVEL_MAX_DB    : -10    // dBFS mapped to red (maximum)
 };
 
 /*============== GUITAR STRINGS =================*/
@@ -125,14 +230,94 @@ STRINGS.forEach(s => {
 
 /*============== AUDIO =================*/
 let audioCtx, analyser, source, hp, lp;
+let stream = null;      // kept so that stop() can release the microphone
+let rafId = null;       // kept so that stop() can cancel the render loop
+let starting = false;   // guards against double clicks during the permission prompt
+let wakeLock = null;    // keeps the screen on while tuning
+let timeBuf = null;     // reused for every analysis to avoid allocating 32 kB ten times a second
+let pixelRatio = 1;     // canvas pixels per CSS pixel, so that Retina screens stay sharp
 let lastUpdate = 0;
 let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
 let lastActiveIdx = -1;
 
-/*============== START =================*/
-async function startTuner(){
+const micButton = document.getElementById('micButton');
+const startOverlay = document.getElementById('startOverlay');
+const startButton = document.getElementById('startButton');
+const startMessage = document.getElementById('startMessage');
+
+let targetLevel = 0;    // 0..1, measured every update interval
+let displayLevel = 0;   // 0..1, smoothed every frame (fast attack, slow decay)
+
+// Raw RMS (not windowed) in dBFS, mapped linearly to 0..1
+function levelFromBuffer(buf){
+  let sumSq = 0;
+  for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
+  const db = 20 * Math.log10(Math.sqrt(sumSq / buf.length) + 1e-9);
+  const span = DSP_CONFIG.LEVEL_MAX_DB - DSP_CONFIG.LEVEL_MIN_DB;
+  return Math.max(0, Math.min(1, (db - DSP_CONFIG.LEVEL_MIN_DB) / span));
+}
+
+function updateMicColour(){
+  displayLevel += (targetLevel - displayLevel) * (targetLevel > displayLevel ? 0.5 : 0.1);
+  // hue 120 (green) at silence down to 0 (red) at maximum
+  micButton.style.setProperty('--level-colour', `hsl(${120 * (1 - displayLevel)},100%,50%)`);
+}
+
+function setMicState(on){
+  micButton.classList.toggle('listening', on);
+  micButton.setAttribute('aria-pressed', String(on));
+  micButton.setAttribute('aria-label', on ? 'Turn microphone off' : 'Turn microphone on');
+}
+
+/*============== START / STOP =================*/
+function describeMicError(e){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    return 'This browser cannot access the microphone (a secure https:// page is required).';
+  switch (e && e.name){
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Microphone access was denied. Allow it in the browser settings, then try again.';
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'No microphone was found.';
+    case 'NotReadableError':
+      return 'The microphone is in use by another application.';
+    default:
+      return 'Microphone error: ' + (e && e.message ? e.message : e);
+  }
+}
+
+// The screen wake lock is released by the browser when the page is hidden,
+// so it is requested again every time the page becomes visible.
+async function requestWakeLock(){
+  if (!('wakeLock' in navigator) || wakeLock) return;
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const lock = await navigator.wakeLock.request('screen');
+    // The tuner may have been stopped while the request was pending
+    if (!stream){ lock.release().catch(() => {}); return; }
+    wakeLock = lock;
+    lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+  }catch(e){
+    wakeLock = null;  // refused (e.g. low battery): tuning still works
+  }
+}
+
+function releaseWakeLock(){
+  if (wakeLock) wakeLock.release().catch(() => {});
+  wakeLock = null;
+}
+
+async function startTuner(){
+  if (stream || starting) return;
+  starting = true;
+  try{
+    // Echo cancellation, noise suppression and automatic gain are tuned for speech:
+    // they attenuate sustained notes and make the level pump, so they are all disabled.
+    stream = await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation : false,
+      noiseSuppression : false,
+      autoGainControl  : false
+    }});
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     hp = audioCtx.createBiquadFilter();
@@ -147,7 +332,7 @@ async function startTuner(){
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = DSP_CONFIG.FFT_SIZE;
-    analyser.smoothingTimeConstant = 0.5;
+    timeBuf = new Float32Array(analyser.fftSize);
 
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(hp);
@@ -157,29 +342,77 @@ async function startTuner(){
     if (audioCtx.state === 'suspended') await audioCtx.resume();
 
     resizeCanvases();
-    requestAnimationFrame(mainLoop);
+    setMicState(true);
+    startOverlay.hidden = true;
+    requestWakeLock();
+    rafId = requestAnimationFrame(mainLoop);
   }catch(e){
-    alert('Micro error: ' + e);
+    // Release the stream if the audio graph failed after permission was granted
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    if (audioCtx) audioCtx.close().catch(() => {});
+    audioCtx = analyser = source = hp = lp = null;
+    setMicState(false);
+    startMessage.textContent = describeMicError(e);
+    startButton.textContent = 'Try again';
+    startOverlay.hidden = false;
+  }finally{
+    starting = false;
   }
 }
 
-function resizeCanvases(){
-  canvases.forEach(canvas => {
-    const row = canvas.parentElement;
-    canvas.width = row.clientWidth;
-    canvas.height = row.clientHeight;
+function stopTuner(){
+  if (rafId !== null) cancelAnimationFrame(rafId);
+  rafId = null;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  if (audioCtx) audioCtx.close();
+  audioCtx = analyser = source = hp = lp = null;
+  releaseWakeLock();
+
+  // Clear the waterfalls and labels so that a stale reading is not left on screen
+  histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
+  lastActiveIdx = -1;
+  STRINGS.forEach((s, idx) => {
+    noteLabels[idx].textContent = s.name;
+    noteLabels[idx].style.color = '#fff';
   });
+  targetLevel = displayLevel = 0;
+  micButton.style.removeProperty('--level-colour');
+  draw();
+  setMicState(false);
 }
 
-// Handle orientation changes and resize events
-function handleResize() {
-  setTimeout(resizeCanvases, 100); // Delay to ensure layout is complete
-}
-
-window.addEventListener('resize', handleResize);
-window.addEventListener('orientationchange', () => {
-  setTimeout(handleResize, 300); // Longer delay for orientation changes
+micButton.addEventListener('click', () => {
+  if (stream) stopTuner(); else startTuner();
 });
+startButton.addEventListener('click', startTuner);
+
+// Save battery and release the microphone indicator while the page is in the background
+document.addEventListener('visibilitychange', () => {
+  if (!audioCtx) return;
+  if (document.hidden){
+    audioCtx.suspend();
+  }else{
+    audioCtx.resume();
+    requestWakeLock();
+  }
+});
+
+// Size each canvas from its on-screen box (padding excluded) in device pixels.
+// Changing width/height clears a canvas, so it is redrawn straight away.
+function resizeCanvases(){
+  pixelRatio = window.devicePixelRatio || 1;
+  canvases.forEach(canvas => {
+    const box = canvas.getBoundingClientRect();
+    canvas.width = Math.round(box.width * pixelRatio);
+    canvas.height = Math.round(box.height * pixelRatio);
+  });
+  draw();
+}
+
+// ResizeObserver covers window resizes and orientation changes without arbitrary timeouts
+new ResizeObserver(resizeCanvases).observe(container);
 
 /*============== AUTOCORRELATION =================*/
 function autoCorrelate(buf, sampleRate) {
@@ -289,10 +522,13 @@ function noteNameFromFreq(freq){
 
 /*============== MAIN LOOP =================*/
 function mainLoop(timestamp){
+  // The waterfall only changes at each analysis, so the canvases are only redrawn then
+  let updated = false;
   if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
-    const buf = new Float32Array(analyser.fftSize);
+    const buf = timeBuf;
     analyser.getFloatTimeDomainData(buf);
 
+    targetLevel = levelFromBuffer(buf);
     const detection = autoCorrelate(buf, audioCtx.sampleRate);
 
     // Find closest string
@@ -316,11 +552,12 @@ function mainLoop(timestamp){
 
     lastActiveIdx = activeIdx;
 
-    // Update labels
+    // Update labels: green only when the string is actually in tune, orange when merely identified
     STRINGS.forEach((s, idx) => {
       if (idx === activeIdx && detection) {
         noteLabels[idx].textContent = noteNameFromFreq(detection.freq);
-        noteLabels[idx].style.color = '#0f0';
+        noteLabels[idx].style.color =
+          Math.abs(centsArray[idx]) <= DSP_CONFIG.IN_TUNE_CENTS ? '#0f0' : '#ff8800';
       } else {
         noteLabels[idx].textContent = s.name;
         noteLabels[idx].style.color = '#fff';
@@ -344,10 +581,12 @@ function mainLoop(timestamp){
     });
 
     lastUpdate = timestamp;
+    updated = true;
   }
 
-  draw();
-  requestAnimationFrame(mainLoop);
+  updateMicColour();
+  if (updated) draw();
+  rafId = requestAnimationFrame(mainLoop);
 }
 
 /*============== DRAW =================*/
@@ -369,14 +608,14 @@ function draw(){
     const rightX = centsToX(10, canvas);
 
     ctx.strokeStyle = '#30d158';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * pixelRatio;
     ctx.beginPath();
     ctx.moveTo(centreX, 0);
     ctx.lineTo(centreX, canvas.height);
     ctx.stroke();
 
     ctx.strokeStyle = '#ff8800';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = pixelRatio;
     ctx.beginPath();
     ctx.moveTo(leftX, 0);
     ctx.lineTo(leftX, canvas.height);
@@ -396,7 +635,9 @@ function draw(){
 }
 
 /*============== START =================*/
-window.addEventListener('load', startTuner);
+// No automatic start: the microphone and audio context need a user gesture.
+// The observer above has already drawn the empty guides behind the start screen.
+resizeCanvases();
 </script>
 </body>
 </html>
