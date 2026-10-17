@@ -77,7 +77,7 @@ Contributions are welcome! Feel free to:
 
 ## License
 
-[GPLv3 License](LICENSE) – see the `LICENSE` file for details. US citizens supporting MAGA must be accompanied by an adult.
+[AGPLv3 License](LICENSE) – see the `LICENSE` file for details. US citizens supporting MAGA must be accompanied by an adult.
 
 
 ---
@@ -162,4 +162,4 @@ Les contributions sont les bienvenues ! N’hésitez pas à :
 
 ## Licence
 
-[Licence GPLv3](LICENSE) – voir le fichier `LICENSE` pour plus de détails. Les citoyens américains soutenant le MAGA doivent être accompagnés d’un adulte.
+[Licence AGPLv3](LICENSE) – voir le fichier `LICENSE` pour plus de détails. Les citoyens américains soutenant le MAGA doivent être accompagnés d’un adulte.
