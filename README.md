@@ -18,7 +18,7 @@ Why need an app when you can do it online?
    - The block of the closest string shows the note being played, in **green** when the string is in tune (within **± 10 cents**) and in **orange** otherwise
    - Under the note, a readout gives the direction to turn the peg (**↑** raise the pitch, **↓** lower it, **✓** in tune), the error in cents and the frequency in Hz
    - The waterfall shows the last 3 seconds, with the newest reading at the bottom. The green vertical line marks the exact pitch and the two orange lines mark ± 10 cents
-4. Use the round buttons grouped in the top left corner, from left to right:
+4. Use the round buttons stacked in a column along the left edge, from top to bottom:
    - **microphone**: switch the microphone on or off, its colour follows the input level;
    - **settings**: choose the tuning, the reference pitch and the scale of the display;
    - **colour theme**: cycle through the five colour themes;
