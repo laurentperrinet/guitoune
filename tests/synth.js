@@ -53,12 +53,14 @@ export function centsError(measured, reference){
  *   rumble: amplitude of an 18 Hz rumble (full scale = 1); dc: constant offset (full scale = 1);
  *   level: RMS of the string alone (full scale = 1), measured over the newest `levelWindow` samples
  *   (default: all of them), so that a note that dies away is still loud where it is analysed;
- *   onset: time since the pluck (s);
+ *   onset: time of the first sample since the pluck (s), negative when the buffer starts before it
+ *   (the string is silent until the pluck);
+ *   attack: level of the click of the attack of the string, as a multiple of `level` (decays in 15 ms);
  *   seed: seed of the random phases and of the noise.
  * Returns: Float32Array. */
 export function pluck({freq, sampleRate = 48000, length = 16384, spectrum = SPECTRA.strong, inharmonicity = 0,
                        snrDb = Infinity, decay = 1, hum = false, rumble = 0, dc = 0, level = 0.05, levelWindow = length,
-                       onset = 0.15, seed = 1}){
+                       attack = 0, onset = 0.15, seed = 1}){
   const random = rng(seed);
   const phases = spectrum.map(() => 2 * Math.PI * random());
   const x = new Float64Array(length);
@@ -66,7 +68,7 @@ export function pluck({freq, sampleRate = 48000, length = 16384, spectrum = SPEC
   for (let i = 0; i < length; i++){
     const t = onset + i / sampleRate;
     let v = 0;
-    spectrum.forEach((amplitude, index) => {
+    if (t >= 0) spectrum.forEach((amplitude, index) => {
       const k = index + 1;
       const f = k * freq * Math.sqrt(1 + inharmonicity * k * k);
       v += amplitude * Math.exp(-t * decay * (1.2 + 0.5 * k)) * Math.sin(2 * Math.PI * f * t + phases[index]);
@@ -80,6 +82,8 @@ export function pluck({freq, sampleRate = 48000, length = 16384, spectrum = SPEC
   for (let i = 0; i < length; i++){
     const t = i / sampleRate;
     let v = x[i] * gain + (sigma ? sigma * gaussian(random) : 0) + dc;
+    const sincePluck = onset + i / sampleRate;
+    if (attack && sincePluck >= 0) v += attack * level * gaussian(random) * Math.exp(-sincePluck / 0.015);
     if (hum) v += 0.015 * (Math.sin(2 * Math.PI * 50 * t) + 0.6 * Math.sin(2 * Math.PI * 100 * t) + 0.3 * Math.sin(2 * Math.PI * 150 * t));
     if (rumble) v += rumble * Math.sin(2 * Math.PI * 18 * t + 1);
     out[i] = v;

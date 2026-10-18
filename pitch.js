@@ -16,6 +16,11 @@
  *   - the band searched is the one of the tuning (searchBand), so that 50 Hz mains hum is out of it;
  *   - a high-pass filter is applied first: a low-frequency rumble keeps n(tau) positive over the
  *     whole search range, and no peak is found at all;
+ *   - a low-pass filter follows: without it, a noise at 15 dB below the note gave a 4 cents error
+ *     (1 cent with it), nearly half of the notes at 12 dB or less were not read, and the broadband
+ *     click of the attack of the string made the period read one octave too low: it lowers n(tau) at the
+ *     true period (about 0.76 instead of 1) and leaves it a little higher at twice the period;
+ *   - CLARITY_MIN is high (0.8): with the low-pass, noisy notes are read again, and some of them wrongly;
  *   - the signal is not windowed: a Hann window biased the reading sharp (+0.65 cent at 82 Hz). */
 
 /*============== CONFIG =================*/
@@ -25,14 +30,21 @@ export const PITCH_CONFIG = {
   MIN_WINDOW      : 2048,   // shortest window (samples)
   SETTLE_SAMPLES  : 2048,   // samples filtered before the window, so that the filter has settled
   HP_RATIO        : 0.6,    // high-pass cut-off, as a fraction of the lowest searched frequency (no unit)
+  LP_RATIO        : 3,      // low-pass cut-off, as a multiple of the highest searched frequency (no unit)
   RMS_THRESHOLD   : 0.005,  // minimum level of the signal (full scale = 1)
-  CLARITY_MIN     : 0.6,    // minimum value of n(tau) at the chosen peak (no unit)
+  CLARITY_MIN     : 0.8,    // minimum value of n(tau) at the chosen peak (no unit)
   PEAK_RATIO      : 0.97,   // a peak is accepted when n(tau) >= PEAK_RATIO * highest peak (no unit)
   MIN_FREQ        : 35,     // lowest searched frequency (Hz)
   MAX_FREQ        : 1000,   // highest searched frequency (Hz)
-  MEDIAN_LENGTH   : 3,      // readings in the median filter
+  MEDIAN_LENGTH   : 3,      // latest readings whose median is the reference of the spike filter
+  SPIKE_CENTS     : 50,     // a reading farther than this from that median is replaced by it (cents)
   HOLD_FRAMES     : 2,      // analyses a new string must stay the closest before it is selected
-  DROPOUT_FRAMES  : 2       // analyses without a reading during which the last string is kept
+  DROPOUT_FRAMES  : 2,      // analyses without a reading during which the last string is kept
+  ACTIVITY_CENTS  : 60,     // half-width of the band, around a string, where its energy is looked for (cents)
+  ACTIVITY_BINS   : 8,      // FFT bins wanted between the two closest strings: twice the half-width of the main lobe (no unit)
+  ACTIVITY_SPAN_DB: 40,     // range between the noise floor of a string and its full activity (dB)
+  ACTIVITY_RISE_DB: 0.5,    // speed at which the noise floor of a string rises towards a steady level (dB per s)
+  ACTIVITY_SILENCE_DB: -150  // a level below this (dB) is a digital silence: it is ignored, not taken for a noise floor
 };
 
 /*============== FFT =================*/
@@ -118,6 +130,26 @@ export function highPass(buf, from, count, sampleRate, cutoff){
   return filtered;
 }
 
+/* Second-order low-pass filter (Q = 1/sqrt(2), -3 dB at the cut-off), applied in place.
+ * It removes the broadband noise and the click of the attack of the string, which are mostly above
+ * the harmonics that give the period.
+ * Args:
+ *   data: Float64Array, filtered in place; count: samples to filter;
+ *   sampleRate: sampling frequency (Hz); cutoff: cut-off frequency (Hz), kept below 0.45 sampleRate. */
+export function lowPass(data, count, sampleRate, cutoff){
+  const w = 2 * Math.PI * Math.min(cutoff, 0.45 * sampleRate) / sampleRate;
+  const cw = Math.cos(w), alpha = Math.sin(w) * Math.SQRT1_2;
+  const a0 = 1 + alpha;
+  const b0 = (1 - cw) / 2 / a0, b1 = (1 - cw) / a0, a1 = -2 * cw / a0, a2 = (1 - alpha) / a0;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < count; i++){
+    const x = data[i];
+    const y = b0 * x + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x; y2 = y1; y1 = y;
+    data[i] = y;
+  }
+}
+
 /*============== PITCH =================*/
 // Number of samples to analyse: enough periods of the lowest string, and never more than available.
 export function windowLength(sampleRate, minFreq, available){
@@ -141,7 +173,7 @@ export function searchBand(freqs, captureCents){
  *   sampleRate: sampling frequency (Hz).
  *   options.minFreq, options.maxFreq: searched band (Hz), default MIN_FREQ and MAX_FREQ.
  *   options.length: number of samples to analyse, default windowLength() for minFreq.
- *   options.filter: false to skip the high-pass filter (tests only), default true.
+ *   options.filter: false to skip the high-pass and low-pass filters (tests only), default true.
  * Returns: {freq (Hz), clarity (0..1)} or null when the signal is too quiet or not periodic. */
 export function detectPitch(buf, sampleRate, options = {}){
   const minFreq = options.minFreq ?? PITCH_CONFIG.MIN_FREQ;
@@ -158,6 +190,7 @@ export function detectPitch(buf, sampleRate, options = {}){
   if (options.filter !== false){
     const settle = Math.min(start, PITCH_CONFIG.SETTLE_SAMPLES);
     src = highPass(buf, start - settle, n + settle, sampleRate, PITCH_CONFIG.HP_RATIO * minFreq);
+    lowPass(src, n + settle, sampleRate, PITCH_CONFIG.LP_RATIO * maxFreq);
     offset = settle;
   }
 
@@ -225,6 +258,99 @@ export function detectPitch(buf, sampleRate, options = {}){
   return {freq: sampleRate / (peak + delta), clarity: Math.min(1, clarity)};
 }
 
+/*============== ACTIVITY OF THE STRINGS =================*/
+const windowTables = new Map();    // per size: window and its sum
+const activityScratch = new Map(); // per size: work buffers
+
+// Blackman-Harris window (4 terms): its side lobes are at -92 dB, where those of a Hann window (-31 dB,
+// falling slowly) let a note light every other string at about -50 dB. The price is a main lobe of
+// +-4 bins instead of +-2, hence ACTIVITY_BINS.
+function blackmanHarris(size){
+  let table = windowTables.get(size);
+  if (!table){
+    const w = new Float64Array(size);
+    let sum = 0;
+    for (let i = 0; i < size; i++){
+      const x = 2 * Math.PI * i / size;
+      w[i] = 0.35875 - 0.48829 * Math.cos(x) + 0.14128 * Math.cos(2 * x) - 0.01168 * Math.cos(3 * x);
+      sum += w[i];
+    }
+    table = {w, sum};
+    windowTables.set(size, table);
+  }
+  return table;
+}
+
+/* Energy of the sound near each string, to show which notes are sounding besides the one detected.
+ * The newest samples are windowed (Blackman-Harris) and transformed; for each string, the highest level in a band of
+ * +-ACTIVITY_CENTS around its frequency is kept. The window is long enough for the two closest strings
+ * to be ACTIVITY_BINS bins apart (16384 samples for a guitar, which is the most that the buffer holds,
+ * and for a bass, whose strings are then 4.7 bins apart; 8192 for a ukulele), so that a component that
+ * is not on a string, such as the 2nd harmonic of the A2 between the G3 and the B3, does not leak into
+ * the band of one of them.
+ * Note that the harmonics of the note played are in the band of other strings: the third harmonic of
+ * the E2 of a guitar is at the B3.
+ * Args:
+ *   buf: Float32Array, mono samples (-1..1), the newest at the end;
+ *   sampleRate: sampling frequency (Hz); freqs: frequency of each string (Hz).
+ * Returns: Array of levels (dB, relative to a sine of amplitude 1), one per string; -180 for silence. */
+export function stringActivity(buf, sampleRate, freqs){
+  let spacing = Infinity;
+  for (let i = 0; i < freqs.length; i++) for (let j = i + 1; j < freqs.length; j++){
+    const d = Math.abs(freqs[i] - freqs[j]);
+    if (d > 1e-6 && d < spacing) spacing = d;
+  }
+  const wanted = Number.isFinite(spacing) ? Math.ceil(PITCH_CONFIG.ACTIVITY_BINS * sampleRate / spacing) : 2048;
+  let largest = 1;
+  while (largest * 2 <= buf.length) largest *= 2;
+  if (largest < 2048) return freqs.map(() => -180);
+  let size = 2048;
+  while (size < wanted && size * 2 <= largest) size *= 2;
+
+  let work = activityScratch.get(size);
+  if (!work){ work = {re: new Float64Array(size), im: new Float64Array(size)}; activityScratch.set(size, work); }
+  const {re, im} = work;
+  const {w: window, sum: windowSum} = blackmanHarris(size), start = buf.length - size;
+  for (let i = 0; i < size; i++) re[i] = buf[start + i] * window[i];
+  im.fill(0);
+  fft(re, im);
+
+  const half = size / 2, binHz = sampleRate / size, margin = Math.pow(2, PITCH_CONFIG.ACTIVITY_CENTS / 1200);
+  return Array.from(freqs, f => {
+    const lo = Math.max(1, Math.floor(f / margin / binHz)), hi = Math.min(half - 1, Math.ceil(f * margin / binHz));
+    let best = 0;
+    for (let k = lo; k <= hi; k++){
+      const power = re[k] * re[k] + im[k] * im[k];
+      if (power > best) best = power;
+    }
+    // A sine of amplitude A gives |X| = A * (sum of the window) / 2 at its bin
+    return 20 * Math.log10(2 * Math.sqrt(best) / windowSum + 1e-9);
+  });
+}
+
+/* Turns the levels of the strings into activities between 0 and 1, so that the display never goes blank
+ * and a note stands out. Each string has its own noise floor: it follows the lowest level seen, at once
+ * downwards and slowly upwards (ACTIVITY_RISE_DB per second), so that a quiet room still makes the
+ * margins move whatever its level (the activity of noise is 0.29 on average, with 0.15 or more nine frames
+ * in ten), and a note that is held fades out after some time. The activity is the level above that floor,
+ * over ACTIVITY_SPAN_DB. A level below ACTIVITY_SILENCE_DB (exact zeros: no microphone is that quiet) gives
+ * 0 and leaves the floor alone, otherwise the leakage of a note would light every other string.
+ * update(levels, seconds) takes the levels (dB) and the time since the previous call (s). */
+export function createActivityMeter(config = PITCH_CONFIG){
+  let floors = null;   // per string; null until the string has had a level that is not a digital silence
+  function update(levels, seconds){
+    if (!floors || floors.length !== levels.length) floors = levels.map(() => null);
+    return levels.map((level, i) => {
+      if (level <= config.ACTIVITY_SILENCE_DB) return 0;
+      if (floors[i] === null || level < floors[i]) floors[i] = level;
+      else floors[i] += Math.min(level - floors[i], config.ACTIVITY_RISE_DB * seconds);
+      return Math.max(0, Math.min(1, (level - floors[i]) / config.ACTIVITY_SPAN_DB));
+    });
+  }
+  function reset(){ floors = null; }
+  return {update, reset};
+}
+
 /*============== STRINGS AND TRACKING =================*/
 export function centsBetween(freq, reference){
   return 1200 * Math.log2(freq / reference);
@@ -236,12 +362,15 @@ function median(values){
 }
 
 /* Follows the readings over time so that the displayed string does not flicker.
- *   - a median over the last readings removes isolated wrong ones (octave jumps, tails of notes);
+ *   - a spike filter removes isolated wrong readings (octave jumps, tails of notes): the latest reading
+ *     is kept, unless it is farther than SPIKE_CENTS from the median of the last MEDIAN_LENGTH ones, which
+ *     is then used instead. A plain median would do the same, but delays the display by about 90 ms
+ *     (131 ms instead of 40 ms while a peg is turned at 20 cents per second);
  *   - a string is selected only when it stays the closest for HOLD_FRAMES analyses in a row,
  *     unless there is none yet or the current one is out of range;
  *   - a short gap without a reading keeps the last string for DROPOUT_FRAMES analyses.
  * update(freq, strings, captureCents) returns {freq, activeIdx, held}:
- *   freq: smoothed frequency (Hz), or null; activeIdx: index in `strings` (objects with a
+ *   freq: frequency (Hz) after the spike filter, or null; activeIdx: index in `strings` (objects with a
  *   `freq`), or -1; held: true when there was no reading and the last string is kept. */
 export function createTracker(config = PITCH_CONFIG){
   let recent = [];
@@ -274,7 +403,10 @@ export function createTracker(config = PITCH_CONFIG){
     misses = 0;
     recent.push(freq);
     if (recent.length > config.MEDIAN_LENGTH) recent.shift();
-    const smoothed = median(recent);
+    // The latest reading, unless it jumps away from the median of the last ones
+    const middle = median(recent);
+    const spiked = recent.length >= 3 && Math.abs(centsBetween(freq, middle)) > config.SPIKE_CENTS;
+    const smoothed = spiked ? middle : freq;
     lastFreq = smoothed;
 
     const idx = nearest(smoothed, strings, captureCents);

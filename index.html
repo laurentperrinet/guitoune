@@ -112,7 +112,7 @@
   
   .noteLabel {
     position: absolute;
-    right: 0.5rem;
+    right: calc(0.5rem + var(--strip, 16px));   /* clear of the right margin strip */
     font-size: clamp(1.5rem, 4vw, 2.4rem);
     font-weight: bold;
     color: var(--label);
@@ -196,7 +196,7 @@
   #controls {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
+    left: calc(max(12px, env(safe-area-inset-left)) + var(--strip, 16px));   /* clear of the left margin strip */
     z-index: 10;
     display: flex;
     flex-direction: column;
@@ -513,7 +513,7 @@
 </dialog>
 <div id="liveStatus" class="srOnly" role="status" aria-live="polite"></div>
 <script type="module">
-import {PITCH_CONFIG, detectPitch, searchBand, centsBetween, createTracker} from './pitch.js';
+import {PITCH_CONFIG, detectPitch, searchBand, centsBetween, createTracker, stringActivity, createActivityMeter} from './pitch.js';
 
 /*============== CONFIG =================*/
 // The parameters of the detection are in PITCH_CONFIG (pitch.js); the ones below are for the display.
@@ -529,6 +529,10 @@ const DSP_CONFIG = {
   UPDATE_INTERVAL : 100,
   SAVER_INTERVAL  : 33,    // time between two redraws in battery saver mode (ms)
   LEVEL_WINDOW    : 4096,  // newest samples used for the level of the microphone button (samples)
+  STRIP_WIDTH     : 16,    // width of each margin strip showing the energy at the other strings (CSS px)
+  ACTIVITY_BASE   : 0.12,  // opacity of a strip at the noise floor: the margins are never blank (no unit)
+  IDLE_PERIOD     : 6000,  // period of the slow breathing of the margins while the microphone is off (ms)
+  IDLE_DEPTH      : 0.3,   // strongest activity of that breathing (no unit)
   IN_TUNE_CENTS   : 10,    // |error| below which a string counts as tuned (matches the orange guides)
   LEVEL_MIN_DB   : -60,   // dBFS mapped to green (silence)
   LEVEL_MAX_DB    : -10    // dBFS mapped to red (maximum)
@@ -735,13 +739,14 @@ const THEMES = [
 const THEME_KEY = 'guitoune.theme';
 const themeButton = document.getElementById('themeButton');
 let themeIdx = 0;
-const palette = {canvasBg:'#222', accent:'#30d158', warn:'#ff8800', glow:true};   // canvas colours, see readPalette()
+const palette = {canvasBg:'#222', accent:'#30d158', warn:'#ff8800', label:'#fff', glow:true};   // canvas colours, see readPalette()
 
 function readPalette(){
   const css = getComputedStyle(document.documentElement);
   palette.canvasBg = css.getPropertyValue('--canvas-bg').trim();
   palette.accent = css.getPropertyValue('--accent').trim();
   palette.warn = css.getPropertyValue('--warn').trim();
+  palette.label = css.getPropertyValue('--label').trim();
   palette.glow = THEMES[themeIdx].glow;
 }
 
@@ -807,7 +812,10 @@ let pixelRatio = 1;     // canvas pixels per CSS pixel, so that Retina screens s
 let lastUpdate = 0;     // time stamp of the last analysis (ms)
 let lastDraw = 0;       // time stamp of the last redraw (ms), used by the battery saver
 let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
-// Median of the last readings and stable choice of the string, see createTracker in pitch.js
+// Energy at each string, 0..1, one entry per analysis like `histories`: drawn in the margins of the other rows
+let activity = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(0));
+const meter = createActivityMeter();   // noise floor of each string, see pitch.js
+// Spike filter on the readings and stable choice of the string, see createTracker in pitch.js
 const tracker = createTracker();
 
 const micButton = document.getElementById('micButton');
@@ -854,6 +862,8 @@ function setLabel(idx, name, colour, detail){
 // (when the microphone stops, or when a setting changes the meaning of the columns)
 function resetDisplay(){
   histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
+  activity = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(0));
+  meter.reset();
   tracker.reset();
   lastAnnouncement = '';
   STRINGS.forEach((s, idx) => setLabel(idx, s.name, 'var(--label)', ''));
@@ -956,6 +966,7 @@ async function startTuner(){
     startMode = 'start';
     startOverlay.hidden = true;
     requestWakeLock();
+    stopIdle();
     rafId = requestAnimationFrame(mainLoop);
   }catch(e){
     // Release the stream if the audio graph failed after permission was granted
@@ -983,6 +994,7 @@ function stopTuner(){
   targetLevel = displayLevel = 0;
   micButton.style.removeProperty('--level-colour');
   setMicState(false);
+  startIdle();
 }
 
 micButton.addEventListener('click', () => {
@@ -1243,8 +1255,13 @@ function mainLoop(timestamp){
 
     targetLevel = levelFromBuffer(buf);
 
-    // The raw reading goes through the tracker: a median of the last readings and a stable choice
-    // of string, so that one doubtful analysis neither jumps nor makes the label flicker
+    // Energy at every string, for the margins of the display
+    const seconds = Math.min(1, (timestamp - lastUpdate) / 1000);
+    pushActivity(meter.update(stringActivity(buf, audioCtx.sampleRate, STRINGS.map(s => s.freq)), seconds));
+
+    // The raw reading goes through the tracker: a spike filter (a reading that jumps away from the median
+    // of the last ones is replaced by it) and a stable choice of string, so that one doubtful analysis
+    // neither jumps nor makes the label flicker
     const reading = detectPitch(buf, audioCtx.sampleRate, searchHz);
     const tracked = tracker.update(reading ? reading.freq : null, STRINGS, DSP_CONFIG.CAPTURE_CENTS);
     const activeIdx = tracked.activeIdx;
@@ -1288,13 +1305,58 @@ function mainLoop(timestamp){
   }
 
   updateMicColour();
-  // Battery saver: between two analyses the trace is redrawn at 30 frames per second, not at every frame
+  // Battery saver: between two analyses the display is redrawn at 30 frames per second, not at every frame.
+  // The margins glide continuously, so there is always something to redraw.
   const due = !settings.battery || timestamp - lastDraw >= DSP_CONFIG.SAVER_INTERVAL;
-  if (updated || (due && histories.some(h => h.some(Boolean)))){
+  if (updated || due){
     draw(timestamp);
     lastDraw = timestamp;
   }
   rafId = requestAnimationFrame(mainLoop);
+}
+
+/*============== MARGINS =================*/
+function pushActivity(values){
+  activity.forEach((history, idx) => {
+    history.push(values[idx]);
+    if (history.length > DSP_CONFIG.ROWS) history.shift();
+  });
+}
+
+// While the microphone is off, the margins breathe slowly, a wave running from the lowest string to the
+// highest one. With "reduce motion" they stay still, at their base opacity.
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let idleId = null;
+
+function idleActivity(timestamp){
+  const phase = 2 * Math.PI * timestamp / DSP_CONFIG.IDLE_PERIOD;
+  return STRINGS.map((s, j) => DSP_CONFIG.IDLE_DEPTH * (0.5 + 0.5 * Math.sin(phase - 2 * Math.PI * j / STRINGS.length)));
+}
+
+function idleLoop(timestamp){
+  if (timestamp - lastUpdate >= DSP_CONFIG.UPDATE_INTERVAL){
+    pushActivity(idleActivity(timestamp));
+    lastUpdate = timestamp;
+  }
+  if (!settings.battery || timestamp - lastDraw >= DSP_CONFIG.SAVER_INTERVAL){
+    draw(timestamp);
+    lastDraw = timestamp;
+  }
+  idleId = requestAnimationFrame(idleLoop);
+}
+
+function startIdle(){
+  if (idleId !== null || stream || reducedMotion.matches) return;
+  idleId = requestAnimationFrame(idleLoop);
+}
+
+function stopIdle(){
+  if (idleId !== null) cancelAnimationFrame(idleId);
+  idleId = null;
+}
+
+if (reducedMotion.addEventListener){
+  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) stopIdle(); else startIdle(); });
 }
 
 /*============== DRAW =================*/
@@ -1333,6 +1395,36 @@ function drawTrace(ctx, canvas, history, frac){
 
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
+}
+
+// Margins of a row: on the left, the energy at the strings lower than this one; on the right, at the
+// higher ones. Each string has its own column, the nearest one next to the trace. The columns glide
+// upwards like the trace, and fade less, so that they keep some memory of what has just sounded.
+function drawColumns(ctx, strings, x0, width, H, rowH, frac){
+  if (strings.length === 0) return;
+  const colW = width / strings.length;
+  ctx.fillStyle = palette.label;
+  strings.forEach((j, c) => {
+    activity[j].forEach((value, i) => {
+      const top = (i + 1 - frac) * rowH;
+      const age = Math.max(0, Math.min(1, (top + rowH / 2) / H));   // 0 at the top (old) .. 1 at the bottom (new)
+      ctx.globalAlpha = (DSP_CONFIG.ACTIVITY_BASE + (1 - DSP_CONFIG.ACTIVITY_BASE) * value) * (0.3 + 0.7 * age);
+      ctx.fillRect(x0 + c * colW, top, colW, rowH + 1);
+    });
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawStrips(ctx, canvas, idx, frac){
+  const W = canvas.width, H = canvas.height, rowH = H / DSP_CONFIG.ROWS;
+  const stripW = Math.round(DSP_CONFIG.STRIP_WIDTH * pixelRatio);
+  const pitch = STRINGS[idx].freq, lower = [], higher = [];
+  STRINGS.forEach((s, j) => { if (j !== idx) (s.freq < pitch ? lower : higher).push(j); });
+  // Left to right: the lowest string is the outermost on the left strip, the nearest higher one the innermost on the right strip
+  lower.sort((a, b) => STRINGS[a].freq - STRINGS[b].freq);
+  higher.sort((a, b) => STRINGS[a].freq - STRINGS[b].freq);
+  drawColumns(ctx, lower, 0, stripW, H, rowH, frac);
+  drawColumns(ctx, higher, W - stripW, stripW, H, rowH, frac);
 }
 
 // `now` is the frame time stamp (ms); without it the trace is drawn at rest, on its rows
@@ -1374,6 +1466,7 @@ function draw(now){
     ctx.lineTo(rightX, canvas.height);
     ctx.stroke();
 
+    drawStrips(ctx, canvas, idx, frac);
     drawTrace(ctx, canvas, histories[idx], frac);
   });
 }
@@ -1381,8 +1474,10 @@ function draw(now){
 /*============== START =================*/
 // No automatic start: the microphone and audio context need a user gesture.
 // The observer above has already drawn the empty guides behind the start screen.
+document.documentElement.style.setProperty('--strip', DSP_CONFIG.STRIP_WIDTH + 'px');
 applyLanguage();
 resizeCanvases();
+startIdle();
 
 // Offline use and installation. Service workers need https (or localhost) and are optional:
 // the tuner works the same without one.

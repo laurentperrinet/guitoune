@@ -4,8 +4,9 @@
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {PITCH_CONFIG, fft, highPass, windowLength, searchBand, detectPitch, centsBetween, createTracker} from '../pitch.js';
-import {SPECTRA, INSTRUMENTS, pluck, whiteNoise, firstPartial, centsError} from './synth.js';
+import {PITCH_CONFIG, fft, highPass, lowPass, windowLength, searchBand, detectPitch, centsBetween, createTracker,
+        stringActivity, createActivityMeter} from '../pitch.js';
+import {SPECTRA, INSTRUMENTS, pluck, whiteNoise, firstPartial, centsError, rng, gaussian} from './synth.js';
 
 const CAPTURE_CENTS = 100;   // as DSP_CONFIG.CAPTURE_CENTS in index.html
 
@@ -67,8 +68,8 @@ test('a stiff string reads a few cents above its first partial, never more than 
   }
 });
 
-test('noise: within 2 cents at 25 dB, within 6 cents at 15 dB', () => {
-  for (const [snrDb, limit] of [[25, 2], [15, 6]]){
+test('white noise: within 0.5 cent at 25 dB and 1.5 cents at 15 dB (without the low-pass, 4 cents at 15 dB)', () => {
+  for (const [snrDb, limit] of [[25, 0.5], [15, 1.5]]){
     for (const n of notes({detunes: [7]})){
       if (n.instrument !== 'guitar') continue;
       const out = read(pluck({freq: n.freq, snrDb, seed: n.seed}), n.strings);
@@ -76,6 +77,39 @@ test('noise: within 2 cents at 25 dB, within 6 cents at 15 dB', () => {
       assert.ok(Math.abs(centsError(out.freq, n.freq)) < limit, `${snrDb} dB, ${n.freq.toFixed(2)} Hz: ${centsError(out.freq, n.freq).toFixed(2)} cents`);
     }
   }
+});
+
+test('notes are still read at 8 dB of noise, and none is read wrongly', () => {
+  // Without the low-pass filter, 22 of 108 such notes are read; with it, all of them.
+  let readCount = 0, count = 0;
+  for (const n of notes({detunes: [-23, 7]})){
+    if (n.instrument !== 'guitar') continue;
+    for (const spectrum of Object.values(SPECTRA)){
+      const out = read(pluck({freq: n.freq, spectrum, snrDb: 8, seed: n.seed}), n.strings);
+      count++;
+      if (!out) continue;
+      readCount++;
+      assert.ok(Math.abs(centsError(out.freq, n.freq)) < 100, `${n.freq.toFixed(2)} Hz read as ${out.freq.toFixed(2)} Hz`);
+    }
+  }
+  assert.ok(readCount >= 0.95 * count, `only ${readCount} of ${count} notes read`);
+});
+
+test('the click of the attack of the string does not make the note read an octave too low', () => {
+  // The buffer ends 80 ms after the pluck: silence, then a click 3 times as loud as the note, then the note.
+  // Without the low-pass filter, 10 of 36 such notes are read one octave or a twelfth too low.
+  const tEnd = 0.08;
+  let seed = 1, read36 = 0, count = 0;
+  for (const base of INSTRUMENTS.guitar) for (const spectrum of Object.values(SPECTRA)) for (const detune of [-23, 7]){
+    const freq = base * Math.pow(2, detune / 1200);
+    const signal = pluck({freq, spectrum, attack: 3, snrDb: 40, onset: tEnd - 16384 / 48000, levelWindow: Math.round(tEnd * 48000), seed: seed++});
+    const out = read(signal, INSTRUMENTS.guitar);
+    count++;
+    if (!out) continue;
+    read36++;
+    assert.ok(Math.abs(centsError(out.freq, freq)) < 100, `${freq.toFixed(2)} Hz read as ${out.freq.toFixed(2)} Hz`);
+  }
+  assert.ok(read36 >= 30, `only ${read36} of ${count} notes read`);
 });
 
 test('50 Hz mains hum does not produce a wrong reading', () => {
@@ -137,6 +171,20 @@ test('an analysis takes well under 5 ms (about 0.3 ms on an Apple M3 Ultra)', ()
   assert.ok(milliseconds < 5, `${milliseconds.toFixed(2)} ms per analysis`);
 });
 
+test('the low-pass filter is at -3 dB at its cut-off, passes the strings and stops the noise above', () => {
+  const sampleRate = 48000, cutoff = 1000;
+  const gain = frequency => {
+    const x = Float64Array.from({length: 24000}, (_, i) => Math.sin(2 * Math.PI * frequency * i / sampleRate));
+    lowPass(x, x.length, sampleRate, cutoff);
+    let peak = 0;
+    for (let i = 12000; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
+    return peak;
+  };
+  assert.ok(gain(100) > 0.99, `100 Hz: ${gain(100)}`);
+  assert.ok(Math.abs(gain(cutoff) - Math.SQRT1_2) < 0.02, `cut-off: ${gain(cutoff)}`);
+  assert.ok(gain(10000) < 0.02, `10 kHz: ${gain(10000)}`);
+});
+
 test('the FFT agrees with a direct Fourier transform, and inverts', () => {
   const size = 32, random = Array.from({length: size}, (_, i) => Math.sin(i * 1.3) + 0.5 * Math.cos(i * 0.4 + 1));
   const re = Float64Array.from(random), im = new Float64Array(size);
@@ -173,11 +221,26 @@ test('centsBetween: an octave is 1200 cents, a semitone 100', () => {
 const strings = [{freq: 110}, {freq: 110 * Math.pow(2, 100 / 1200)}];   // two strings one semitone apart
 const rawTracker = () => createTracker({...PITCH_CONFIG, MEDIAN_LENGTH: 1});
 
-test('tracker: a median removes an isolated wrong reading', () => {
+test('tracker: the spike filter removes an isolated wrong reading', () => {
   const tracker = createTracker();
   const out = [110, 110, 220, 110].map(f => tracker.update(f, [{freq: 110}, {freq: 220}], CAPTURE_CENTS));
   assert.deepEqual(out.map(o => o.activeIdx), [0, 0, 0, 0]);
   assert.ok(Math.abs(out[2].freq - 110) < 1e-9, `the outlier gave ${out[2].freq}`);
+});
+
+test('tracker: a pitch that changes smoothly is followed without delay', () => {
+  // A peg turned at 60 cents per second: 6 cents between two analyses. A plain median of 3 would lag by one analysis.
+  const tracker = createTracker(), one = [{freq: 110}];
+  for (let k = 0; k < 10; k++){
+    const freq = 110 * Math.pow(2, (-45 + 6 * k) / 1200);
+    assert.ok(Math.abs(tracker.update(freq, one, CAPTURE_CENTS).freq - freq) < 1e-9, `analysis ${k}`);
+  }
+});
+
+test('tracker: a jump to another string is followed after one analysis', () => {
+  const tracker = createTracker(), far = [{freq: 110}, {freq: 146.83}];
+  const out = [110, 110, 110, 146.83, 146.83, 146.83].map(f => tracker.update(f, far, CAPTURE_CENTS).activeIdx);
+  assert.deepEqual(out, [0, 0, 0, 0, 1, 1]);
 });
 
 test('tracker: a new string needs two analyses in a row when the old one is still in range', () => {
@@ -205,4 +268,84 @@ test('tracker: a gap of two analyses keeps the string, the third clears it, and 
 test('tracker: a pitch more than 100 cents from every string selects none', () => {
   const tracker = rawTracker();
   assert.equal(tracker.update(110 * Math.pow(2, 350 / 1200), strings, CAPTURE_CENTS).activeIdx, -1);
+});
+
+/*============== activity of the strings (margins of the display) ================*/
+const sine = (frequency, amplitude, length = 16384, sampleRate = 48000) =>
+  Float32Array.from({length}, (_, i) => amplitude * Math.sin(2 * Math.PI * frequency * i / sampleRate));
+
+test('activity: a tone lights its own string, at its level, and the others far below', () => {
+  // A2 with an amplitude of 0.1 is -20 dB; a frequency between two bins costs up to 1 dB
+  const levels = stringActivity(sine(110, 0.1), 48000, INSTRUMENTS.guitar);
+  assert.ok(Math.abs(levels[1] + 20) < 2, `A2: ${levels[1].toFixed(1)} dB`);
+  // The leakage of the window is far below: with a Hann window the others are at about -70 dB
+  levels.forEach((level, i) => { if (i !== 1) assert.ok(level < levels[1] - 70, `string ${i}: ${level.toFixed(1)} dB`); });
+});
+
+test('activity: the harmonics of the note played light the strings they fall on', () => {
+  // The 3rd harmonic of the E2 is at 247.2 Hz (the B3) and the 4th at 329.6 Hz (the E4)
+  const e2 = 82.41, signal = sine(e2, 0.1).map((v, i) => v + 0.04 * Math.sin(2 * Math.PI * 3 * e2 * i / 48000) + 0.04 * Math.sin(2 * Math.PI * 4 * e2 * i / 48000));
+  const levels = stringActivity(signal, 48000, INSTRUMENTS.guitar);
+  const [lowE, a2, d3, g3, b3, highE] = levels;
+  assert.ok(b3 > a2 + 20 && b3 > d3 + 20 && highE > g3 + 20, `levels ${levels.map(l => l.toFixed(0))}`);
+  assert.ok(lowE > b3 + 5, 'the note itself is the highest');
+});
+
+test('activity: the two lowest strings of a bass, 14 Hz apart, are told apart', () => {
+  const levels = stringActivity(sine(41.2, 0.1), 48000, INSTRUMENTS.bass);
+  assert.ok(Math.abs(levels[0] + 20) < 2, `E1: ${levels[0].toFixed(1)} dB`);
+  assert.ok(levels[1] < levels[0] - 25, `A1: ${levels[1].toFixed(1)} dB`);
+});
+
+test('activity: silence gives very low, finite levels, and a short buffer is accepted', () => {
+  for (const level of stringActivity(new Float32Array(16384), 48000, INSTRUMENTS.guitar)){
+    assert.ok(Number.isFinite(level) && level < -100, `${level}`);
+  }
+  assert.deepEqual(stringActivity(new Float32Array(1000), 48000, INSTRUMENTS.guitar), INSTRUMENTS.guitar.map(() => -180));
+});
+
+// What the page does: every 0.1 s, 4800 new samples enter the buffer, and the levels go to the meter
+function noiseActivities(sigma, frames, seed){
+  const random = rng(seed), buffer = new Float32Array(16384), meter = createActivityMeter(), out = [];
+  for (let f = 0; f < frames; f++){
+    buffer.copyWithin(0, 4800);
+    for (let i = 16384 - 4800; i < 16384; i++) buffer[i] = sigma * gaussian(random);
+    out.push(meter.update(stringActivity(buffer, 48000, INSTRUMENTS.guitar), 0.1));
+  }
+  return out;
+}
+
+test('activity meter: noise alone keeps the margins moving, whatever its level', () => {
+  // The activity is relative to the noise floor of each string: it is the same in a quiet room (-70 dBFS)
+  // as in a noisy one (-34 dBFS). Measured: 0.29 on average, 0.15 or more nine frames in ten.
+  for (const sigma of [0.0003, 0.02]){
+    const settled = noiseActivities(sigma, 200, 5).slice(60), all = settled.flat();
+    const mean = all.reduce((p, q) => p + q, 0) / all.length;
+    const alive = settled.filter(frame => Math.max(...frame) >= 0.05).length / settled.length;
+    assert.ok(mean > 0.15 && mean < 0.5, `noise ${sigma}: mean ${mean.toFixed(2)}`);
+    assert.ok(alive > 0.98, `noise ${sigma}: ${(100 * alive).toFixed(0)} % of the frames are alive`);
+  }
+});
+
+test('activity meter: a note stands out from the noise, and a held note fades out', () => {
+  const meter = createActivityMeter();
+  for (let k = 0; k < 30; k++) meter.update([-85, -86], 0.1);
+  const note = meter.update([-30, -87], 0.1);
+  assert.ok(note[0] === 1 && note[1] === 0, `note: ${note}`);
+  // The same level for 120 s: the floor has risen to it (0.5 dB per second), the activity is gone
+  let held = note;
+  for (let k = 0; k < 1200; k++) held = meter.update([-30, -87], 0.1);
+  assert.ok(held[0] < 0.02, `held: ${held[0]}`);
+  meter.reset();
+  assert.equal(meter.update([-30, -61], 0.1)[0], 0, 'after a reset the first level is the floor');
+});
+
+test('activity meter: a digital silence gives 0 and is not taken for the noise floor', () => {
+  const meter = createActivityMeter();
+  assert.deepEqual(meter.update([-180, -180], 0.1), [0, 0]);
+  // The first real levels are the floor; a note then lights its string, and the leakage on the other does not
+  meter.update([-100, -100], 0.1);
+  const values = meter.update([-20, -103], 0.1);
+  assert.equal(values[0], 1);
+  assert.equal(values[1], 0);
 });
