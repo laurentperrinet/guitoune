@@ -159,3 +159,62 @@ test('the project can be tested and built by CI', () => {
   assert.ok(pkg.scripts.test);
   assert.match(read('.github/workflows/test.yml'), /npm test/);
 });
+
+// The changelog exists in three languages. A translation that is forgotten, or a number that is mistyped
+// in one of them, fails here. The prose is not compared: only what must be identical in every language.
+const CHANGELOGS = {English: 'CHANGELOG.md', French: 'CHANGELOG.fr.md', Québécois: 'CHANGELOG.qc.md'};
+const changelogs = Object.fromEntries(Object.entries(CHANGELOGS).map(([language, file]) => [language, read(file)]));
+
+function entries(text){
+  return text.split(/^## /m).slice(1).map(entry => {
+    const [heading, ...rest] = entry.split('\n');
+    const body = rest.join('\n');
+    // Without the link targets, and with decimal commas as points, the numbers must be the same everywhere
+    const numbers = (heading + '\n' + body).replace(/\]\([^)]*\)/g, ']').replace(/(\d)(?:,|\{,\})(\d)/g, '$1.$2')
+      .match(/\d+(?:\.\d+)?/g) || [];
+    return {
+      dates: heading.match(/\d{4}-\d{2}-\d{2}/g),
+      commits: [...body.matchAll(/\/commit\/([0-9a-f]{7})\)/g)].map(m => m[1]),
+      numbers: numbers.sort(),
+      subsections: (body.match(/^### /gm) || []).length,
+      bullets: (body.match(/^- /gm) || []).length,
+      tableRows: (body.match(/^\|/gm) || []).length,
+    };
+  });
+}
+
+test('changelog: the three languages have the same entries, dates, commits, numbers and structure', () => {
+  const reference = entries(changelogs.English);
+  assert.ok(reference.length >= 5, 'CHANGELOG.md has no entries');
+  for (const language of ['French', 'Québécois']){
+    const other = entries(changelogs[language]);
+    assert.equal(other.length, reference.length, `${language}: ${other.length} entries, English ${reference.length}`);
+    reference.forEach((entry, i) => {
+      const where = `${language}, entry ${i + 1} (${entry.dates.join(' to ')})`;
+      assert.deepEqual(other[i].dates, entry.dates, `${where}: dates`);
+      assert.deepEqual(other[i].commits, entry.commits, `${where}: commits`);
+      assert.deepEqual(other[i].numbers, entry.numbers, `${where}: numbers`);
+      assert.equal(other[i].subsections, entry.subsections, `${where}: subsections`);
+      assert.equal(other[i].bullets, entry.bullets, `${where}: bullets`);
+      assert.equal(other[i].tableRows, entry.tableRows, `${where}: table rows`);
+    });
+  }
+});
+
+test('changelog: every commit that is cited exists as a link to the repository, and the languages link to each other', () => {
+  for (const [language, text] of Object.entries(changelogs)){
+    assert.ok(!/(?<!\[)`[0-9a-f]{7}`(?!\])/.test(text), `${language}: a commit hash is not a link`);
+    for (const [other, file] of Object.entries(CHANGELOGS))
+      if (other !== language) assert.ok(text.includes(`](${file})`), `${language}: no link to ${file}`);
+  }
+});
+
+test('README: each language cites the changelog of its language', () => {
+  assert.ok(english.includes('](CHANGELOG.md)'), 'English README');
+  assert.ok(french.includes('](CHANGELOG.fr.md)'), 'French README');
+  assert.ok(quebecois.includes('](CHANGELOG.qc.md)'), 'Québécois README');
+});
+
+test('offline cache: the changelogs are not needed by the page', () => {
+  for (const file of Object.values(CHANGELOGS)) assert.ok(!sw.includes(file), `${file} should not be in the offline cache`);
+});

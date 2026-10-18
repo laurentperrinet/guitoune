@@ -247,6 +247,13 @@
 
   #themeButton .themeHalf { fill: currentColor; }
 
+  /* Flag of the current language, filling the round button */
+  #controls #languageButton svg { width: 28px; height: 28px; stroke: none; }
+  #languageButton .flag { display: none; }
+  #languageButton[data-lang="fr"] .flagFr,
+  #languageButton[data-lang="en"] .flagEn,
+  #languageButton[data-lang="qc"] .flagQc { display: block; }
+
   #settingsDialog,
   #helpDialog {
     box-sizing: border-box;
@@ -401,6 +408,7 @@
   #fullscreenButton:focus-visible,
   #settingsButton:focus-visible,
   #themeButton:focus-visible,
+  #languageButton:focus-visible,
   #helpButton:focus-visible,
   #helpDialog a:focus-visible,
   .helpArrow:focus-visible,
@@ -449,6 +457,40 @@
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="9"/>
       <path class="themeHalf" d="M12 3a9 9 0 0 1 0 18z"/>
+    </svg>
+  </button>
+  <button id="languageButton" type="button" aria-label="Language: Français. Activate for the next one" title="Language: Français" data-lang="fr">
+    <!-- Only the flag of the current language is shown (see the CSS); the colours are those of the flags -->
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <clipPath id="flagClip"><circle cx="12" cy="12" r="11"/></clipPath>
+        <g id="fleur">
+          <path d="M0-3.2C1.4-1.8 1.4-.2 0 .8-1.4-.2-1.4-1.8 0-3.2Z"/>
+          <path d="M-.4.2C-2.2-.6-3.2.6-2.4 1.6-1.8 2.2-.9 1.8-.4 1Z"/>
+          <path d="M.4.2C2.2-.6 3.2.6 2.4 1.6 1.8 2.2.9 1.8.4 1Z"/>
+          <rect x="-1.6" y="1.4" width="3.2" height=".8"/>
+        </g>
+      </defs>
+      <g class="flag flagFr" clip-path="url(#flagClip)">
+        <rect x="0" y="0" width="8" height="24" fill="#0055a4"/>
+        <rect x="8" y="0" width="8" height="24" fill="#fff"/>
+        <rect x="16" y="0" width="8" height="24" fill="#ef4135"/>
+      </g>
+      <g class="flag flagEn" clip-path="url(#flagClip)">
+        <rect width="24" height="24" fill="#012169"/>
+        <path d="M0 0L24 24M24 0L0 24" stroke="#fff" stroke-width="4"/>
+        <path d="M0 0L24 24M24 0L0 24" stroke="#c8102e" stroke-width="1.4"/>
+        <path d="M12 0V24M0 12H24" stroke="#fff" stroke-width="6"/>
+        <path d="M12 0V24M0 12H24" stroke="#c8102e" stroke-width="3.6"/>
+      </g>
+      <g class="flag flagQc" clip-path="url(#flagClip)">
+        <rect width="24" height="24" fill="#003da5"/>
+        <path d="M12 0V24M0 12H24" stroke="#fff" stroke-width="3.6"/>
+        <g fill="#fff">
+          <use href="#fleur" x="5.5" y="5.5"/><use href="#fleur" x="18.5" y="5.5"/>
+          <use href="#fleur" x="5.5" y="18.5"/><use href="#fleur" x="18.5" y="18.5"/>
+        </g>
+      </g>
     </svg>
   </button>
   <button id="helpButton" type="button" aria-label="Open help" aria-haspopup="dialog" title="Help" data-i18n-aria-label="helpOpen" data-i18n-title="help">
@@ -530,6 +572,7 @@ const DSP_CONFIG = {
   SAVER_INTERVAL  : 33,    // time between two redraws in battery saver mode (ms)
   LEVEL_WINDOW    : 4096,  // newest samples used for the level of the microphone button (samples)
   STRIP_WIDTH     : 16,    // width of each margin strip showing the energy at the other strings (CSS px)
+  STRIP_FADE_RATE : 10,    // speed at which the strips of the row of the string detected fade out, and back in (per s)
   ACTIVITY_BASE   : 0.12,  // opacity of a strip at the noise floor: the margins are never blank (no unit)
   IDLE_PERIOD     : 6000,  // period of the slow breathing of the margins while the microphone is off (ms)
   IDLE_DEPTH      : 0.3,   // strongest activity of that breathing (no unit)
@@ -563,8 +606,10 @@ const TUNINGS = [
 // localStorage can be missing or throw (private windows, blocked site data):
 // the tuner then simply keeps its defaults.
 const SETTINGS_KEY = 'guitoune.settings';
-const LANGUAGES = ['auto', 'en', 'fr', 'qc'];   // 'auto' follows the language of the browser; 'qc' is Québécois
-const settings = {tuning: TUNINGS[0].id, a4: DSP_CONFIG.A4_DEFAULT, fine: false, battery: false, language: 'auto'};
+// The order of the language button; French is the default, 'qc' is Québécois
+const LANGUAGES = ['fr', 'en', 'qc'];
+const LANGUAGE_NAMES = {fr: 'Français', en: 'English', qc: 'Québécois'};   // each in its own language
+const settings = {tuning: TUNINGS[0].id, a4: DSP_CONFIG.A4_DEFAULT, fine: false, battery: false, language: LANGUAGES[0]};
 
 function clampA4(hz){
   return Math.max(DSP_CONFIG.A4_MIN, Math.min(DSP_CONFIG.A4_MAX, Math.round(hz)));
@@ -632,7 +677,8 @@ const I18N = {
     tuning: 'Tuning', a4: 'Reference pitch A4 (Hz)',
     fine: 'Fine scale (±{fine} cents instead of ±{coarse})',
     battery: 'Battery saver (30 frames per second)',
-    language: 'Language', languageAuto: 'Automatic (browser language)', done: 'Done',
+    language: 'Language', languageTitle: 'Language: {language}',
+    languageLabel: 'Language: {language}. Activate for the next one', done: 'Done',
     micNoApi: 'This browser cannot access the microphone (a secure https:// page is required).',
     micDenied: 'Microphone access was denied. Allow it in the browser settings, then try again.',
     micNone: 'No microphone was found.',
@@ -667,7 +713,8 @@ const I18N = {
     tuning: 'Accordage', a4: 'Diapason A4 (Hz)',
     fine: 'Échelle fine (±{fine} cents au lieu de ±{coarse})',
     battery: 'Économie de batterie (30 images par seconde)',
-    language: 'Langue', languageAuto: 'Automatique (langue du navigateur)', done: 'Terminé',
+    language: 'Langue', languageTitle: 'Langue : {language}',
+    languageLabel: 'Langue : {language}. Activer pour passer à la suivante', done: 'Terminé',
     micNoApi: 'Ce navigateur ne peut pas accéder au microphone (une page https:// sécurisée est nécessaire).',
     micDenied: 'L’accès au microphone a été refusé. Autorisez-le dans les réglages du navigateur, puis réessayez.',
     micNone: 'Aucun microphone n’a été trouvé.',
@@ -695,6 +742,7 @@ I18N.qc = {
   micInterrupted: 'Le micro a été coupé. Touche pour repartir.',
   micOn: 'Allumer le micro', micOff: 'Éteindre le micro', micTitle: 'Micro',
   themeLabel: 'Thème de couleurs : {theme}. Appuie pour passer au suivant',
+  languageLabel: 'Langue : {language}. Appuie pour passer à la suivante',
   helpImage: 'Schéma de l’accordeur. La corde captée s’allume en vert. Les trois barres verticales marquent moins 10 cents, pile-poil et plus 10 cents. Six flèches relient les lignes E2 à E4 aux six cordes, du son grave au son aigu. En dessous, les boutons micro, réglages, thème de couleurs, aide et plein écran, empilés le long du bord gauche, sont expliqués.',
   battery: 'Économiseur de batterie (30 images par seconde)', done: 'C’est beau',
   micNoApi: 'Ce navigateur peut pas accéder au micro (il faut une page https:// sécurisée).',
@@ -710,12 +758,10 @@ const DIAGRAMS = {en: 'guitoune_howto.svg', fr: 'guitoune_howto.fr.svg', qc: 'gu
 
 // A link such as ?lang=fr shows that language until the user picks another one in the settings
 let urlLanguage = new URLSearchParams(location.search).get('lang');
-if (!LANGUAGES.includes(urlLanguage) || urlLanguage === 'auto') urlLanguage = null;
+if (!LANGUAGES.includes(urlLanguage)) urlLanguage = null;
 
 function resolveLanguage(){
-  if (urlLanguage) return urlLanguage;
-  if (settings.language !== 'auto') return settings.language;
-  return (navigator.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  return urlLanguage || settings.language;
 }
 
 let lang = resolveLanguage();
@@ -814,6 +860,11 @@ let lastDraw = 0;       // time stamp of the last redraw (ms), used by the batte
 let histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
 // Energy at each string, 0..1, one entry per analysis like `histories`: drawn in the margins of the other rows
 let activity = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(0));
+// The row of the string detected has no margin strips: its pitch is in range, and the trace shows where.
+// Each row has its own visibility (0..1), which fades towards its target instead of jumping.
+let activeRow = -1;
+let stripFade = STRINGS.map(() => 1);
+let lastFadeTime = 0;   // time stamp of the last fade step (ms)
 const meter = createActivityMeter();   // noise floor of each string, see pitch.js
 // Spike filter on the readings and stable choice of the string, see createTracker in pitch.js
 const tracker = createTracker();
@@ -863,6 +914,8 @@ function setLabel(idx, name, colour, detail){
 function resetDisplay(){
   histories = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(null));
   activity = STRINGS.map(() => Array(DSP_CONFIG.ROWS).fill(0));
+  activeRow = -1;
+  stripFade = STRINGS.map(() => 1);
   meter.reset();
   tracker.reset();
   lastAnnouncement = '';
@@ -1042,6 +1095,7 @@ const fineInput = document.getElementById('fineInput');
 const fineLabel = document.getElementById('fineLabel');
 const batteryInput = document.getElementById('batteryInput');
 const languageSelect = document.getElementById('languageSelect');
+const languageButton = document.getElementById('languageButton');
 
 // <dialog> is missing from very old browsers: hide the button rather than break the page
 if (typeof settingsDialog.showModal !== 'function') settingsButton.hidden = true;
@@ -1062,9 +1116,7 @@ function fillTuningSelect(){
 }
 
 function fillLanguageSelect(){
-  languageSelect.replaceChildren(
-    new Option(tr('languageAuto'), 'auto'), new Option('English', 'en'), new Option('Français', 'fr'),
-    new Option('Québécois', 'qc'));
+  languageSelect.replaceChildren(...LANGUAGES.map(code => new Option(LANGUAGE_NAMES[code], code)));
   languageSelect.value = urlLanguage || settings.language;
 }
 
@@ -1079,6 +1131,9 @@ function applyLanguage(){
   }
   fillTuningSelect();
   fillLanguageSelect();
+  languageButton.dataset.lang = lang;
+  languageButton.title = tr('languageTitle', {language: LANGUAGE_NAMES[lang]});
+  languageButton.setAttribute('aria-label', tr('languageLabel', {language: LANGUAGE_NAMES[lang]}));
   fineLabel.textContent = tr('fine', {fine: DSP_CONFIG.FINE_DISPLAY_CENTS, coarse: DSP_CONFIG.DISPLAY_CENTS});
   startButton.textContent = tr(startMode);
   setMicState(micButton.classList.contains('listening'));
@@ -1127,8 +1182,16 @@ batteryInput.addEventListener('change', () => {
 });
 
 languageSelect.addEventListener('change', () => {
-  settings.language = LANGUAGES.includes(languageSelect.value) ? languageSelect.value : 'auto';
+  settings.language = LANGUAGES.includes(languageSelect.value) ? languageSelect.value : LANGUAGES[0];
   urlLanguage = null;   // the choice in the settings now wins over ?lang=
+  saveSettings();
+  applyLanguage();
+});
+
+// Cycles through the languages; the choice is saved with the other settings, like the tuning
+languageButton.addEventListener('click', () => {
+  settings.language = LANGUAGES[(LANGUAGES.indexOf(lang) + 1) % LANGUAGES.length];
+  urlLanguage = null;   // the button now wins over ?lang=
   saveSettings();
   applyLanguage();
 });
@@ -1265,6 +1328,7 @@ function mainLoop(timestamp){
     const reading = detectPitch(buf, audioCtx.sampleRate, searchHz);
     const tracked = tracker.update(reading ? reading.freq : null, STRINGS, DSP_CONFIG.CAPTURE_CENTS);
     const activeIdx = tracked.activeIdx;
+    activeRow = activeIdx;   // kept while the last string is held, -1 when no string is detected
     // `held`: no reading this time, but the last string is kept for a moment (the labels stay)
     const detection = reading && !tracked.held ? {freq: tracked.freq, clarity: reading.clarity} : null;
     const centsArray = detection ? STRINGS.map(s => centsBetween(detection.freq, s.freq)) : [];
@@ -1400,7 +1464,7 @@ function drawTrace(ctx, canvas, history, frac){
 // Margins of a row: on the left, the energy at the strings lower than this one; on the right, at the
 // higher ones. Each string has its own column, the nearest one next to the trace. The columns glide
 // upwards like the trace, and fade less, so that they keep some memory of what has just sounded.
-function drawColumns(ctx, strings, x0, width, H, rowH, frac){
+function drawColumns(ctx, strings, x0, width, H, rowH, frac, visible){
   if (strings.length === 0) return;
   const colW = width / strings.length;
   ctx.fillStyle = palette.label;
@@ -1408,14 +1472,15 @@ function drawColumns(ctx, strings, x0, width, H, rowH, frac){
     activity[j].forEach((value, i) => {
       const top = (i + 1 - frac) * rowH;
       const age = Math.max(0, Math.min(1, (top + rowH / 2) / H));   // 0 at the top (old) .. 1 at the bottom (new)
-      ctx.globalAlpha = (DSP_CONFIG.ACTIVITY_BASE + (1 - DSP_CONFIG.ACTIVITY_BASE) * value) * (0.3 + 0.7 * age);
+      ctx.globalAlpha = visible * (DSP_CONFIG.ACTIVITY_BASE + (1 - DSP_CONFIG.ACTIVITY_BASE) * value) * (0.3 + 0.7 * age);
       ctx.fillRect(x0 + c * colW, top, colW, rowH + 1);
     });
   });
   ctx.globalAlpha = 1;
 }
 
-function drawStrips(ctx, canvas, idx, frac){
+function drawStrips(ctx, canvas, idx, frac, visible){
+  if (visible < 0.01) return;
   const W = canvas.width, H = canvas.height, rowH = H / DSP_CONFIG.ROWS;
   const stripW = Math.round(DSP_CONFIG.STRIP_WIDTH * pixelRatio);
   const pitch = STRINGS[idx].freq, lower = [], higher = [];
@@ -1423,13 +1488,16 @@ function drawStrips(ctx, canvas, idx, frac){
   // Left to right: the lowest string is the outermost on the left strip, the nearest higher one the innermost on the right strip
   lower.sort((a, b) => STRINGS[a].freq - STRINGS[b].freq);
   higher.sort((a, b) => STRINGS[a].freq - STRINGS[b].freq);
-  drawColumns(ctx, lower, 0, stripW, H, rowH, frac);
-  drawColumns(ctx, higher, W - stripW, stripW, H, rowH, frac);
+  drawColumns(ctx, lower, 0, stripW, H, rowH, frac, visible);
+  drawColumns(ctx, higher, W - stripW, stripW, H, rowH, frac, visible);
 }
 
 // `now` is the frame time stamp (ms); without it the trace is drawn at rest, on its rows
 function draw(now){
   const frac = now === undefined ? 1 : Math.max(0, Math.min(1, (now - lastUpdate) / DSP_CONFIG.UPDATE_INTERVAL));
+  // Fade the strips of the row of the string detected out, and the others back in; at rest, no fading
+  const fadeStep = now === undefined ? 1 : Math.min(1, Math.min(0.1, Math.max(0, now - lastFadeTime) / 1000) * DSP_CONFIG.STRIP_FADE_RATE);
+  if (now !== undefined) lastFadeTime = now;
   STRINGS.forEach((s, idx) => {
     const canvas = canvases[idx];
     if (!canvas || canvas.width === 0) return;
@@ -1466,7 +1534,8 @@ function draw(now){
     ctx.lineTo(rightX, canvas.height);
     ctx.stroke();
 
-    drawStrips(ctx, canvas, idx, frac);
+    stripFade[idx] = (stripFade[idx] ?? 1) + ((idx === activeRow ? 0 : 1) - (stripFade[idx] ?? 1)) * fadeStep;
+    drawStrips(ctx, canvas, idx, frac, stripFade[idx]);
     drawTrace(ctx, canvas, histories[idx], frac);
   });
 }

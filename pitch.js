@@ -10,7 +10,7 @@
  * lies in [-1, 1] whatever the level. The first lobe whose peak is close to the highest one is
  * taken as the period. r(tau) is computed with an FFT, in O(N log N) instead of O(N^2).
  *
- * Choices made from measurements on synthetic strings (see README, "Detection"):
+ * Choices made from measurements on synthetic strings (see CHANGELOG.md, "what was measured on the detection"):
  *   - PEAK_RATIO is high (0.97): with the usual 0.9, a note with an almost absent fundamental that
  *     dies away quickly was read one octave too high;
  *   - the band searched is the one of the tuning (searchBand), so that 50 Hz mains hum is out of it;

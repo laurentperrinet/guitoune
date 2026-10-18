@@ -1,6 +1,6 @@
 /* Tests of the pitch detection (pitch.js).
  * Run with `npm test`. The thresholds are those measured on the synthetic strings of synth.js:
- * see the section "Detection" of the README. */
+ * see the entry "what was measured on the detection" of the CHANGELOG. */
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';

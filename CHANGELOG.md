@@ -1,7 +1,28 @@
 # Changelog
 
+🇬🇧 English · 🇫🇷 [Français](CHANGELOG.fr.md) · ⚜️ [Québécois](CHANGELOG.qc.md)
+
 Dates are ISO 8601. Before 2026-10-17 the entries summarise the commit messages; none of the earlier
 versions was tagged.
+
+## 2026-10-18, language button
+
+### Added
+- A button with the flag of the current language (France, United Kingdom, Québec) cycles through French,
+  English and Québécois. The choice is saved with the other settings, like the tuning; the colour theme
+  already had its own saved choice.
+
+### Changed
+- French is the default language, instead of following the language of the browser: the "Automatic"
+  option is gone, and a saved "auto" falls back to French. `?lang=` still forces a language until the next
+  choice.
+
+## 2026-10-18, no margin strips on the string detected
+
+### Changed
+- The row of the string detected has no margin strips: its pitch is in range and the trace shows where,
+  so the strips of the other rows are what tells the notes apart. They fade out there (`STRIP_FADE_RATE`,
+  about half a second) and come back when the note stops, instead of jumping.
 
 ## 2026-10-18, activity of the other strings in the margins
 
@@ -47,26 +68,59 @@ The detection of 2026-10-17 was measured again, and some of its choices were wro
   changes smoothly is followed without delay, a jump to another string after one analysis).
 
 ### Discussions
-These cover all the discussions of 2026-10-18, including the activity margins above. None of this work
-is committed yet, so there is no commit to link.
+These cover the discussions of 2026-10-18 on the detection, the margins and the tests.
 
 - **Detection quality, second look** (started late on 2026-10-17). The seven points of the audit were
   measured again on the shipped code, and several earlier conclusions were wrong. Result: the low-pass
-  filter is back, `CLARITY_MIN` is 0.8, the tracker uses a spike filter, and the README figures are
+  filter is back, `CLARITY_MIN` is 0.8, the tracker uses a spike filter, and the README figures were
   replaced by measurements. Five tests were added and checked by mutation (without the low-pass filter
-  three fail, without the spike filter the lag test fails).
-- **Activity margins** (entry above). Request: show on the sides the activity of the other notes, so that
+  three fail, without the spike filter the lag test fails). Committed with the margins ([`706a1cb`](https://github.com/laurentperrinet/guitoune/commit/706a1cb));
+  the measurements are now in the entry below.
+- **Activity margins** ([`706a1cb`](https://github.com/laurentperrinet/guitoune/commit/706a1cb), entries above). Request: show on the sides the activity of the other notes, so that
   the detected note stands out. Choices made: the real energy of the sound, lower strings on the left and
   higher ones on the right, and a slow breathing at rest. Two tuning errors were found on the way: the
   Hann window let a note light up the other strings (hence Blackman-Harris), and a noise floor set too
   high gave exactly 0 in a quiet room (hence one noise floor per string, in `createActivityMeter()`).
 - **README check.** A second `/harmonize-code` run found the five steps of the model and the 27 rows of
   the table of variables consistent with `pitch.js`, in English and in French.
-- **Failing tests on GitHub Actions.** `npm test` now runs `node --test tests/*.test.js` (the former
-  command failed on Node 22) and the workflow uses `checkout@v5` and `setup-node@v5` (no more Node 20
-  deprecation warning). The README consistency tests then failed because `LP_RATIO` and `SPIKE_CENTS` are
-  not in the table of variables yet and `CLARITY_MIN` is still 0.6 there: this has to be fixed before
-  pushing.
+- **Failing tests on GitHub Actions** ([`c4185ed`](https://github.com/laurentperrinet/guitoune/commit/c4185ed)). `npm test` now runs `node --test tests/*.test.js`
+  (the former command failed on Node 22) and the workflow uses `checkout@v5` and `setup-node@v5` (no more
+  Node 20 deprecation warning). The README consistency tests had then failed because `LP_RATIO` and
+  `SPIKE_CENTS` were missing from the table of variables and `CLARITY_MIN` still said 0.6 there: the
+  table now follows the code.
+
+## 2026-10-18, what was measured on the detection
+
+These figures come from one-off benchmarks on **synthetic** plucked strings (6 strings, three spectra, stiffness, noise, hum, attack, 44.1 and 48 kHz, explicit seeds), comparing with the pipeline that Guitoune used before: the plain autocorrelation with a Hann window, behind two Web Audio filters. The benchmark script is not kept in the repository; its thresholds live on in [tests/pitch.test.js](tests/pitch.test.js). **No real recording was used**, and the cost on a phone has not been measured.
+
+| Condition | Error before (median / 95th percentile) | Error now |
+|-----------|------------------------------------------|-----------|
+| Harmonic tone, clean | 0.13 / 1.17 cent | 0.01 / 0.03 cent |
+| White noise at 25 dB | 0.12 / 1.16 cent | 0.04 / 0.11 cent |
+| White noise at 15 dB | 0.13 / 1.14 cent | 0.11 / 0.44 cent |
+| Stiff string ($B=4\cdot10^{-4}$) | 3.35 / 3.89 cents sharp | 2.53 / 3.30 cents sharp |
+
+On **6000 random notes** (fundamental from 2 % to 100 % of the second partial, decay from 0.5 to 8 times a normal string, noise from 8 to 50 dB, stiffness, an attack on half of them), the same notes for both:
+
+| | Before | Now |
+|---|---|---|
+| Gross errors (more than 100 cents) | 21 (0.35 %) | **4 (0.07 %)** |
+| of which with noise at 12 dB or less (554 notes) | 20 | 3 |
+| Notes not read | 11.2 % | 15.3 % |
+| of which with noise at 12 dB or less | 7.8 % | 20.8 % |
+| Error, 95th / 99th percentile | 4.9 / 7.0 cents | 4.2 / 6.3 cents |
+
+So the module is wrong five times less often, but it reads fewer faint or fast-dying notes: it needs a clarity of 0.8. With 0.6 it reads as many as before, and is wrong 15 times (0.25 %).
+
+### Notes
+- **Stiff strings and accuracy.** The partials of a thick string are higher than true harmonics, so the period gives a pitch a few cents above the first partial: this comes from the string, and no real string was measured. On ideal tones detuned from -50 to +50 cents, the error is at most 0.18 cent on a guitar (the E2), 0.03 cent on a ukulele and 0.6 cent on the E1 of a bass.
+- **Cost.** 0.3 ms per analysis for a guitar and 0.8 ms for a bass, against 8 ms before. With a JavaScript engine that does no compilation, a pessimistic bound, 16 and 33 ms against 466 ms.
+- **Octave errors.** With the usual peak ratio of 0.9, 6 of 12 notes with an almost absent fundamental and a fast decay were read one octave too high, hence $\kappa=0.97$; one of 12 at an extreme decay (12 times a normal string) still is.
+- **Noise and the attack.** The low-pass filter is needed. Without it, noise at 15 dB gives 4.2 cents (95th percentile), 46 % of the notes at 12 dB or less are not read, and the click of the attack of the string (3 times as loud as the note) makes 10 of 36 notes read one octave or a twelfth too low 80 ms after the pluck, one of them as another string. The click lowers $n(\tau)$ at the true period (to about 0.76 instead of 1.0) and leaves it a little higher at twice the period (0.77), so that the peak ratio sometimes picks the longer one. Now none is wrong; 29 of 36 notes are read 30 ms after the pluck (22 with the click), and all of them from 80 ms.
+- **Disturbances.** Mains hum at 50 Hz made 17 % of gross errors before and 60 Hz made 83 %; none now on a guitar. A rumble twice as loud as the note was wrong from 30 Hz upwards before (8 of 36, then every note from 50 Hz); now it is never wrong, but it stops the reading when it is strong: at 40 Hz, 24 of 36 notes are not read, and none from 50 Hz. **A bass is more exposed**: its strings are close to the hum, which is wrong for 6 of 24 notes at 50 Hz and 3 at 60 Hz, and a rumble at 18 Hz or more stops most readings (one at 40 Hz makes 4 of 24 notes wrong).
+- **Flicker and delay.** In a noisy room, over 4320 analyses, 21 gaps and 1 frame on a wrong string before, 1 and 0 now, and 3442 readings against 2700. Without the spike filter, 21 gaps and 5 wrong frames. While a peg is turned at 20 cents per second, the display lags 40 ms behind the string (0.8 cent), against 65 ms before; a plain median of 3 readings would have lagged 131 ms (2.6 cents), which is why a spike filter is used instead.
+- **Filters.** Both are needed. The high-pass filter keeps a rumble from hiding the period. It was wrong before: Web Audio reads the `Q` of these filters in dB, so the former value 0.707 was a quality factor of 1.085, a resonance that raised 50 Hz by 0.7 dB instead of lowering it by 3 dB. A higher cut-off stops a rumble at 40 to 60 Hz, but it fails with 60 Hz hum (10 to 12 notes of 36 wrong), so 0.6 is kept.
+- **Margins.** On a tone, the other strings are 70 dB or more below the string that sounds, thanks to the Blackman-Harris window (with a Hann window a note lit the other strings at about 50 dB below it, and with a window of 8192 samples the 2nd harmonic of an A2 lit the G3 and the B3). In noise alone the activity averages 0.29, and is 0.15 or more nine frames in ten, **at any noise level from -74 to -34 dBFS**, because it is relative to the noise floor of each string; a note played in that noise gives 1.00, against 0.34 on average for the strings that are not on a harmonic. The harmonics of the note light the strings they fall on (the E4 for the 3rd harmonic of an A2), and the first instants of a pluck light every string, the onset being broadband. The window is 0.34 s long for a guitar, so the margins lag by about 0.17 s behind the sound. Exact zeros, which no microphone gives, show nothing but the base opacity.
 
 ## 2026-10-17, detection, instruments and tests
 
