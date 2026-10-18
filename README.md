@@ -61,7 +61,7 @@ Why need an app when you can do it online?
 
 ### The model
 
-Each analysis takes the newest samples of the microphone, sampled at $f_s$, and goes through five steps. The parameters are written in the table below.
+Each analysis takes the newest samples of the microphone, sampled at $f_s$, and goes through six steps. The parameters are written in the table below.
 
 **1. Band and window.** The band searched is that of the strings of the tuning, with a margin $C_c$ (in cents), limited to $[f_{\min},\,f_{\max}]$; the window holds $P$ periods of its lowest frequency $f_{\mathrm{low}}$, at least $N_{\min}$ and at most $N_{\mathrm{buf}}$ samples:
 
@@ -91,7 +91,7 @@ The played string is the one with the smallest $|c_k|$, provided that $|c_k|\le 
 
 $$L_k = 20\,\log_{10}\frac{2\,\max_{f\,\in\,\mathrm{band}}|X(f)|}{\sum_n w[n]}$$
 
-Each string has a noise floor $\ell_k$ that follows $L_k$ down at once and up at $v$ dB per second, so that a quiet room still makes the margins move and a note that is held fades out. The activity is $a_k=\min\!\left(1,\ \max\!\left(0,\ (L_k-\ell_k)/S\right)\right)$, and a column of the margin is drawn for each analysis with the opacity $a_{\min}+(1-a_{\min})\,a_k$. While the microphone is off, $a_k$ is a slow wave, $a_k=\frac{D}{2}\left(1+\sin\!\left(\frac{2\pi t}{T}-\frac{2\pi k}{K}\right)\right)$, which runs from the lowest string to the highest one ($K$ strings, period $T$, depth $D$) and stops when the system asks to reduce motion.
+Each string has a noise floor $\ell_k$ that follows $L_k$ down at once and up at $v$ dB per second, so that a quiet room still makes the margins move and a note that is held fades out. The activity is $a_k=\min\!\left(1,\ \max\!\left(0,\ (L_k-\ell_k)/S\right)\right)$, and a column of the margin is drawn for each analysis with the opacity $a_{\min}+(1-a_{\min})\,a_k$. While the microphone is off, $a_k$ is a slow wave, $a_k=\frac{D}{2}\left(1+\sin\!\left(\frac{2\pi t}{T}-\frac{2\pi k}{K}\right)\right)$, which runs from the lowest string to the highest one ($K$ strings, period $T$, depth $D$) and stops when the system asks to reduce motion. The strips of the row of the string detected fade out, and come back when the note stops, at `STRIP_FADE_RATE` per second.
 
 ### Variables
 
@@ -236,7 +236,7 @@ Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 
 ### Le modèle
 
-Chaque analyse prend les derniers échantillons du microphone, échantillonné à $f_s$, et suit cinq étapes. Les paramètres sont dans le tableau ci‑dessous.
+Chaque analyse prend les derniers échantillons du microphone, échantillonné à $f_s$, et suit six étapes. Les paramètres sont dans le tableau ci‑dessous.
 
 **1. Bande et fenêtre.** La bande recherchée est celle des cordes de l’accordage, avec une marge $C_c$ (en cents), limitée à $[f_{\min},\,f_{\max}]$ ; la fenêtre contient $P$ périodes de sa fréquence la plus basse $f_{\mathrm{low}}$, au moins $N_{\min}$ et au plus $N_{\mathrm{buf}}$ échantillons :
 
@@ -266,7 +266,7 @@ La corde jouée est celle de plus petit $|c_k|$, à condition que $|c_k|\le C_c$
 
 $$L_k = 20\,\log_{10}\frac{2\,\max_{f\,\in\,\mathrm{bande}}|X(f)|}{\sum_n w[n]}$$
 
-Chaque corde a un plancher de bruit $\ell_k$ qui suit $L_k$ vers le bas aussitôt et vers le haut de $v$ dB par seconde, si bien qu’une pièce calme fait quand même bouger les marges et qu’une note tenue s’éteint. L’activité est $a_k=\min\!\left(1,\ \max\!\left(0,\ (L_k-\ell_k)/S\right)\right)$, et une colonne de marge est tracée à chaque analyse avec l’opacité $a_{\min}+(1-a_{\min})\,a_k$. Quand le microphone est éteint, $a_k$ est une onde lente, $a_k=\frac{D}{2}\left(1+\sin\!\left(\frac{2\pi t}{T}-\frac{2\pi k}{K}\right)\right)$, qui va de la corde la plus grave à la plus aiguë ($K$ cordes, période $T$, profondeur $D$) et s’arrête quand le système demande de réduire les animations.
+Chaque corde a un plancher de bruit $\ell_k$ qui suit $L_k$ vers le bas aussitôt et vers le haut de $v$ dB par seconde, si bien qu’une pièce calme fait quand même bouger les marges et qu’une note tenue s’éteint. L’activité est $a_k=\min\!\left(1,\ \max\!\left(0,\ (L_k-\ell_k)/S\right)\right)$, et une colonne de marge est tracée à chaque analyse avec l’opacité $a_{\min}+(1-a_{\min})\,a_k$. Quand le microphone est éteint, $a_k$ est une onde lente, $a_k=\frac{D}{2}\left(1+\sin\!\left(\frac{2\pi t}{T}-\frac{2\pi k}{K}\right)\right)$, qui va de la corde la plus grave à la plus aiguë ($K$ cordes, période $T$, profondeur $D$) et s’arrête quand le système demande de réduire les animations. Les bandes de la ligne de la corde détectée s’effacent en fondu, et reviennent quand la note s’arrête, à `STRIP_FADE_RATE` par seconde.
 
 ### Variables
 
