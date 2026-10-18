@@ -5,6 +5,19 @@
 Les dates suivent la norme ISO 8601. Avant le 2026-10-17, les entrées résument les messages de commit ;
 aucune des versions précédentes n’a été étiquetée.
 
+## 2026-10-18, un seuil relatif au bruit, et une mesure toutes les 50 ms
+
+### Modifié
+- Le signal est analysé quand il dépasse de 3 fois le bruit de fond de la pièce, et non un niveau fixe de 0,005. Dans une pièce calme, une note douce est lue (un niveau efficace de 0,004 n’était lu sur aucune corde, et G3, B3 et E4 étaient perdues les premières) ; un son stable comme un ronflement n’est jamais pris pour une note (un ronflement à 150 Hz était lu comme le D3 à chaque analyse).
+- Un niveau stable fait monter le plancher 12 fois plus vite (6 dB par seconde au lieu de 0,5) : un ronflement apparu après l’apprentissage du plancher était lu pendant 74 s, il l’est maintenant pendant 8 s.
+- Une analyse toutes les 50 ms au lieu de 100 ms, et 60 lignes d’historique pour garder 3 s : une note est lue 31 ms après son début au lieu de 63 pour le E4 (67 au lieu de 88 pour le E2). Les comptes du suiveur suivent : une médiane de 5, 4 analyses pour changer de corde, 4 pour garder une corde pendant un trou.
+- Une mesure claire à au moins 0,95 n’est jamais prise pour un pic, si bien qu’une corde pincée pendant que la précédente sonne encore s’affiche aussitôt : 113 ms au lieu de 188 pour le E4 puis le A2.
+
+### Remarques
+- La difficulté avec le E4 n’a pas été reproduite sur des cordes synthétiques, qui lisent le E4 aussi vite que les autres. Le seuil fixe en est la cause la plus probable : cette corde est plus faible au microphone et s’éteint plus tôt, et le contrôle automatique de gain du microphone est coupé.
+- Deux idées n’ont rien donné et n’ont pas été gardées : des fenêtres plus courtes que l’habituelle pour une note qui vient de commencer, et une clarté plus basse près de la mesure précédente (0,7 point de notes en plus, un 99ᵉ centile moins bon).
+- Une note qui sonne déjà au démarrage de l’accordeur est ignorée jusqu’à ce qu’elle s’éteigne, et une note qui décroît de moins de 2 dB en 2 s compte comme un son stable.
+
 ## 2026-10-18, bouton de langue
 
 ### Ajouté

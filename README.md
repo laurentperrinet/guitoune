@@ -49,8 +49,9 @@ Why need an app when you can do it online?
 - **Battery saver** - optional, redraws the display at 30 frames per second instead of every frame
 - **Accessible** - the note and the error are also given as text, and announced to screen readers
 - **Pitch detection**:
-  - McLeod method computed with an FFT: about 0.3 ms per analysis on an Apple M3 Ultra, a new reading every 100 ms
+  - McLeod method computed with an FFT: about 0.3 ms per analysis on an Apple M3 Ultra, a new reading every 50 ms
   - Search band derived from the tuning, high-pass and low-pass filters, no window: robust to mains hum, constant offsets, broadband noise, the click of the attack and low-frequency rumble
+  - Sensitivity relative to the noise floor of the room: a soft note is read in a quiet room, and a steady hum or fan is never taken for a note
   - Spike filter and stable choice of the string, so that the label does not flicker
   - Error at most 0.2 cent on ideal harmonic tones; measured on synthetic strings only, see the [CHANGELOG](CHANGELOG.md)
   - No echo cancellation, noise suppression or automatic gain control: they attenuate sustained notes
@@ -67,7 +68,7 @@ Each analysis takes the newest samples of the microphone, sampled at $f_s$, and 
 
 $$f_{\mathrm{low}} = \max\!\left(f_{\min},\ \frac{\min_k f_k}{2^{C_c/1200}}\right), \quad f_{\mathrm{high}} = \min\!\left(f_{\max},\ 2^{C_c/1200}\max_k f_k\right), \quad N = \min\!\left(N_{\mathrm{buf}},\ \max\!\left(N_{\min},\ \left\lceil \frac{P f_s}{f_{\mathrm{low}}}\right\rceil\right)\right)$$
 
-**2. Filters and level.** A fourth-order high-pass filter at $f_{hp}=\rho\,f_{\mathrm{low}}$ (two identical second-order sections, $-6$ dB at the cut-off) stops the rumble, and a second-order low-pass filter at $f_{lp}=\lambda\,f_{\mathrm{high}}$ ($-3$ dB at the cut-off) removes the broadband noise and the click of the attack of the string. Then the mean is removed. The signal $x[n]$ is ignored when it is too quiet: $\sqrt{\frac{1}{N}\sum_n x[n]^2} < x_{\min}$. No window is applied.
+**2. Filters and level.** A fourth-order high-pass filter at $f_{hp}=\rho\,f_{\mathrm{low}}$ (two identical second-order sections, $-6$ dB at the cut-off) stops the rumble, and a second-order low-pass filter at $f_{lp}=\lambda\,f_{\mathrm{high}}$ ($-3$ dB at the cut-off) removes the broadband noise and the click of the attack of the string. Then the mean is removed. The level of the window, $\sqrt{\frac{1}{N}\sum_n x[n]^2}$, must exceed $\max(g_{\min},\ \gamma\,\ell)$, where $\ell$ is the noise floor of the room: the lowest level seen, followed down at once and up at $v_g$ dB per second, or at $v_s$ dB per second when the level has stayed within $\Delta_s$ dB for $T_s$ seconds (a hum, not a note); before the first level is measured, the threshold is $x_{\min}$. No window is applied.
 
 **3. Normalised square difference.** The correlation $r(\tau)$ is computed with an FFT, $r=\mathcal{F}^{-1}\!\left(|\mathcal{F}x|^2\right)$ on the zero-padded signal, and $n(\tau)$ lies in $[-1,\,1]$ whatever the level:
 
@@ -83,7 +84,7 @@ The reading is rejected when its "clarity", the height of the parabola at its ve
 
 $$f_k = f_{A4}\;2^{(m_k-69)/12}, \qquad c_k = 1200\,\log_2\frac{f}{f_k}$$
 
-Before this step, the reading goes through a tracker: $f$ is the latest reading, unless it is farther than $C_s$ from the median of the last $M$ readings, which is then used instead (a spike filter); a new string is selected only when it stays the closest for $H$ analyses in a row (at once if the old one is farther than $C_c$), and the last string is kept for $D$ analyses without a reading.
+Before this step, the reading goes through a tracker: $f$ is the latest reading, unless it is farther than $C_s$ from the median of the last $M$ readings, which is then used instead (a spike filter); a new string is selected only when it stays the closest for $H$ analyses in a row (at once if the old one is farther than $C_c$), and the last string is kept for $D$ analyses without a reading. A reading whose clarity is at least $c_b$ is never replaced: it is a new note, not a spike.
 
 The played string is the one with the smallest $|c_k|$, provided that $|c_k|\le C_c$. On the waterfall, an error $c$ (limited to $[-C_d,\,C_d]$) is drawn at the horizontal position $x = \dfrac{W}{2}\left(1+\dfrac{c}{C_d}\right)$, where $W$ is the width of the block. Each reading is a cell of width $W/N_c$ whose colour is a vertical gradient from the hue of the previous reading to its own; the cells glide upwards continuously and fade out with age.
 
@@ -106,16 +107,23 @@ The values below are those of the code: `PITCH_CONFIG` in [pitch.js](pitch.js) f
 | - | `SETTLE_SAMPLES` | 2048 samples | Samples filtered before the window, so that the filter has settled |
 | $\rho$ | `HP_RATIO` | 0.6 (no unit) | High-pass cut-off, as a fraction of the lowest searched frequency |
 | $\lambda$ | `LP_RATIO` | 3 (no unit) | Low-pass cut-off, as a multiple of the highest searched frequency |
-| $x_{\min}$ | `RMS_THRESHOLD` | 0.005 (full scale = 1) | Minimum level of the signal |
+| $x_{\min}$ | `RMS_THRESHOLD` | 0.005 (full scale = 1) | Level that a signal must reach while the noise floor is not known yet |
+| $\gamma$ | `GATE_RATIO` | 3 (no unit) | A signal must exceed the noise floor of the room by this factor to be analysed |
+| $g_{\min}$ | `GATE_MIN_RMS` | 0.0003 (full scale = 1) | Lowest level ever analysed |
+| $v_g$ | `GATE_RISE_DB` | 0.5 dB per second | Speed at which the noise floor rises towards a level that is not steady |
+| $T_s$ | `GATE_STEADY_SECONDS` | 2 s | A level is steady when it stays within `GATE_STEADY_DB` for this long |
+| $\Delta_s$ | `GATE_STEADY_DB` | 2 dB | Spread of a steady level |
+| $v_s$ | `GATE_STEADY_RISE_DB` | 6 dB per second | Speed at which the noise floor rises towards a steady level |
 | $c_{\min}$ | `CLARITY_MIN` | 0.8 (no unit) | Minimum value of $n(\tau)$ at the period to accept a reading |
 | $\kappa$ | `PEAK_RATIO` | 0.97 (no unit) | A peak is accepted when it reaches this fraction of the highest one |
 | $f_{\min}$ | `MIN_FREQ` | 35 Hz | Lowest frequency ever searched |
 | $f_{\max}$ | `MAX_FREQ` | 1000 Hz | Highest frequency ever searched |
-| $M$ | `MEDIAN_LENGTH` | 3 readings | Latest readings whose median is the reference of the spike filter |
+| $M$ | `MEDIAN_LENGTH` | 5 readings | Latest readings whose median is the reference of the spike filter |
 | $C_s$ | `SPIKE_CENTS` | 50 cents | A reading farther than this from that median is replaced by it |
-| $H$ | `HOLD_FRAMES` | 2 analyses | Analyses a new string must stay the closest before it is selected |
-| $D$ | `DROPOUT_FRAMES` | 2 analyses | Analyses without a reading during which the last string is kept |
-| $\Delta t$ | `UPDATE_INTERVAL` | 100 ms | Time between two analyses |
+| $c_b$ | `SPIKE_BYPASS_CLARITY` | 0.95 (no unit) | A reading at least this clear is never taken for a spike |
+| $H$ | `HOLD_FRAMES` | 4 analyses | Analyses a new string must stay the closest before it is selected |
+| $D$ | `DROPOUT_FRAMES` | 4 analyses | Analyses without a reading during which the last string is kept |
+| $\Delta t$ | `UPDATE_INTERVAL` | 50 ms | Time between two analyses |
 | - | `SAVER_INTERVAL` | 33 ms | Time between two redraws in battery saver mode (30 frames per second) |
 | $f_{A4}$ | `A4_DEFAULT`, `A4_MIN`, `A4_MAX` | 440 Hz (415 to 466 Hz) | Reference pitch of A4, and its limits |
 | $m_k$ | `TUNINGS[].midi` | 40, 45, 50, 55, 59, 64 (standard guitar) | MIDI note number of each string |
@@ -124,7 +132,7 @@ The values below are those of the code: `PITCH_CONFIG` in [pitch.js](pitch.js) f
 | $C_c$ | `CAPTURE_CENTS` | 100 cents | Largest distance at which a string counts as played, and margin of the search band |
 | $C_t$ | `IN_TUNE_CENTS` | 10 cents | Largest error of a string in tune (green) |
 | $N_c$ | `COLS` | 35 columns | Sets the width of the trace ($W/N_c$) |
-| $N_r$ | `ROWS` | 30 rows (about 3 s of history) | Number of readings kept in the waterfall |
+| $N_r$ | `ROWS` | 60 rows (about 3 s of history) | Number of readings kept in the waterfall |
 | - | `LEVEL_WINDOW` | 4096 samples | Newest samples used for the level of the microphone button |
 | - | `LEVEL_MIN_DB` | -60 dBFS | Input level shown in green on the microphone button |
 | - | `LEVEL_MAX_DB` | -10 dBFS | Input level shown in red on the microphone button |
@@ -224,8 +232,9 @@ Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
 - **Économie de batterie** – facultative, redessine l’affichage à 30 images par seconde au lieu de chaque image  
 - **Accessible** – la note et l’écart sont aussi donnés en texte, et annoncés aux lecteurs d’écran  
 - **Détection de hauteur** :
-  - Méthode de McLeod calculée par FFT : environ 0,3 ms par analyse sur un Apple M3 Ultra, une nouvelle mesure toutes les 100 ms  
+  - Méthode de McLeod calculée par FFT : environ 0,3 ms par analyse sur un Apple M3 Ultra, une nouvelle mesure toutes les 50 ms  
   - Bande de recherche déduite de l’accordage, filtres passe‑haut et passe‑bas, pas de fenêtre : robuste au ronflement du secteur, aux décalages continus, au bruit large bande, au claquement de l’attaque et aux grondements basse fréquence  
+  - Sensibilité relative au bruit de fond de la pièce : une note douce est lue dans une pièce calme, et un ronflement ou un ventilateur constant n’est jamais pris pour une note  
   - Filtre anti‑pic et choix stable de la corde, pour que l’étiquette ne clignote pas  
   - Erreur d’au plus 0,2 cent sur des sons harmoniques idéaux ; mesurée sur des cordes synthétiques seulement, voir le [CHANGELOG](CHANGELOG.fr.md)  
   - Ni annulation d’écho, ni suppression de bruit, ni contrôle automatique de gain : ils atténuent les notes tenues  
@@ -242,7 +251,7 @@ Chaque analyse prend les derniers échantillons du microphone, échantillonné �
 
 $$f_{\mathrm{low}} = \max\!\left(f_{\min},\ \frac{\min_k f_k}{2^{C_c/1200}}\right), \quad f_{\mathrm{high}} = \min\!\left(f_{\max},\ 2^{C_c/1200}\max_k f_k\right), \quad N = \min\!\left(N_{\mathrm{buf}},\ \max\!\left(N_{\min},\ \left\lceil \frac{P f_s}{f_{\mathrm{low}}}\right\rceil\right)\right)$$
 
-**2. Filtres et niveau.** Un filtre passe‑haut du quatrième ordre à $f_{hp}=\rho\,f_{\mathrm{low}}$ (deux sections identiques du second ordre, $-6$ dB à la coupure) arrête les grondements, et un filtre passe‑bas du second ordre à $f_{lp}=\lambda\,f_{\mathrm{high}}$ ($-3$ dB à la coupure) retire le bruit large bande et le claquement de l’attaque de la corde. Ensuite la moyenne est retirée. Le signal $x[n]$ est ignoré s’il est trop faible : $\sqrt{\frac{1}{N}\sum_n x[n]^2} < x_{\min}$. Aucune fenêtre n’est appliquée.
+**2. Filtres et niveau.** Un filtre passe‑haut du quatrième ordre à $f_{hp}=\rho\,f_{\mathrm{low}}$ (deux sections identiques du second ordre, $-6$ dB à la coupure) arrête les grondements, et un filtre passe‑bas du second ordre à $f_{lp}=\lambda\,f_{\mathrm{high}}$ ($-3$ dB à la coupure) retire le bruit large bande et le claquement de l’attaque de la corde. Ensuite la moyenne est retirée. Le niveau de la fenêtre, $\sqrt{\frac{1}{N}\sum_n x[n]^2}$, doit dépasser $\max(g_{\min},\ \gamma\,\ell)$, où $\ell$ est le bruit de fond de la pièce : le plus bas niveau vu, suivi vers le bas aussitôt et vers le haut de $v_g$ dB par seconde, ou de $v_s$ dB par seconde quand le niveau est resté à $\Delta_s$ dB près pendant $T_s$ secondes (un ronflement, pas une note) ; avant la première mesure, le seuil est $x_{\min}$. Aucune fenêtre n’est appliquée.
 
 **3. Différence quadratique normalisée.** La corrélation $r(\tau)$ est calculée par FFT, $r=\mathcal{F}^{-1}\!\left(|\mathcal{F}x|^2\right)$ sur le signal complété par des zéros, et $n(\tau)$ reste dans $[-1,\,1]$ quel que soit le niveau :
 
@@ -258,7 +267,7 @@ La mesure est rejetée si sa « clarté », la hauteur de la parabole en son som
 
 $$f_k = f_{A4}\;2^{(m_k-69)/12}, \qquad c_k = 1200\,\log_2\frac{f}{f_k}$$
 
-Avant cette étape, la mesure passe par un suiveur : $f$ est la dernière mesure, sauf si elle est à plus de $C_s$ de la médiane des $M$ dernières mesures, qui la remplace alors (un filtre anti‑pic) ; une nouvelle corde n’est choisie que si elle reste la plus proche pendant $H$ analyses de suite (aussitôt si l’ancienne est à plus de $C_c$), et la dernière corde est gardée pendant $D$ analyses sans mesure.
+Avant cette étape, la mesure passe par un suiveur : $f$ est la dernière mesure, sauf si elle est à plus de $C_s$ de la médiane des $M$ dernières mesures, qui la remplace alors (un filtre anti‑pic) ; une nouvelle corde n’est choisie que si elle reste la plus proche pendant $H$ analyses de suite (aussitôt si l’ancienne est à plus de $C_c$), et la dernière corde est gardée pendant $D$ analyses sans mesure. Une mesure dont la clarté vaut au moins $c_b$ n’est jamais remplacée : c’est une nouvelle note, pas un pic.
 
 La corde jouée est celle de plus petit $|c_k|$, à condition que $|c_k|\le C_c$. Sur la cascade, un écart $c$ (limité à $[-C_d,\,C_d]$) est tracé à la position horizontale $x = \dfrac{W}{2}\left(1+\dfrac{c}{C_d}\right)$, où $W$ est la largeur du bloc. Chaque mesure est une case de largeur $W/N_c$ dont la couleur est un dégradé vertical de la teinte de la mesure précédente à la sienne ; les cases glissent de façon continue vers le haut et s’estompent avec l’âge.
 
@@ -281,16 +290,23 @@ Les valeurs ci‑dessous sont celles du code : `PITCH_CONFIG` dans [pitch.js](pi
 | - | `SETTLE_SAMPLES` | 2048 échantillons | Échantillons filtrés avant la fenêtre, pour que le filtre soit stabilisé |
 | $\rho$ | `HP_RATIO` | 0,6 (sans unité) | Coupure du passe‑haut, en fraction de la fréquence la plus basse recherchée |
 | $\lambda$ | `LP_RATIO` | 3 (sans unité) | Coupure du passe‑bas, en multiple de la fréquence la plus haute recherchée |
-| $x_{\min}$ | `RMS_THRESHOLD` | 0,005 (pleine échelle = 1) | Niveau minimal du signal |
+| $x_{\min}$ | `RMS_THRESHOLD` | 0,005 (pleine échelle = 1) | Niveau qu’un signal doit atteindre tant que le bruit de fond n’est pas connu |
+| $\gamma$ | `GATE_RATIO` | 3 (sans unité) | Un signal doit dépasser le bruit de fond de la pièce de ce facteur pour être analysé |
+| $g_{\min}$ | `GATE_MIN_RMS` | 0,0003 (pleine échelle = 1) | Plus bas niveau jamais analysé |
+| $v_g$ | `GATE_RISE_DB` | 0,5 dB par seconde | Vitesse à laquelle le bruit de fond monte vers un niveau qui n’est pas stable |
+| $T_s$ | `GATE_STEADY_SECONDS` | 2 s | Un niveau est stable quand il reste à `GATE_STEADY_DB` près pendant cette durée |
+| $\Delta_s$ | `GATE_STEADY_DB` | 2 dB | Écart d’un niveau stable |
+| $v_s$ | `GATE_STEADY_RISE_DB` | 6 dB par seconde | Vitesse à laquelle le bruit de fond monte vers un niveau stable |
 | $c_{\min}$ | `CLARITY_MIN` | 0,8 (sans unité) | Valeur minimale de $n(\tau)$ à la période pour accepter une mesure |
 | $\kappa$ | `PEAK_RATIO` | 0,97 (sans unité) | Un pic est accepté s’il atteint cette fraction du plus haut |
 | $f_{\min}$ | `MIN_FREQ` | 35 Hz | Fréquence la plus basse jamais recherchée |
 | $f_{\max}$ | `MAX_FREQ` | 1000 Hz | Fréquence la plus haute jamais recherchée |
-| $M$ | `MEDIAN_LENGTH` | 3 mesures | Dernières mesures dont la médiane sert de référence au filtre anti‑pic |
+| $M$ | `MEDIAN_LENGTH` | 5 mesures | Dernières mesures dont la médiane sert de référence au filtre anti‑pic |
 | $C_s$ | `SPIKE_CENTS` | 50 cents | Une mesure plus éloignée que cela de cette médiane est remplacée par elle |
-| $H$ | `HOLD_FRAMES` | 2 analyses | Analyses pendant lesquelles une nouvelle corde doit rester la plus proche avant d’être choisie |
-| $D$ | `DROPOUT_FRAMES` | 2 analyses | Analyses sans mesure pendant lesquelles la dernière corde est gardée |
-| $\Delta t$ | `UPDATE_INTERVAL` | 100 ms | Durée entre deux analyses |
+| $c_b$ | `SPIKE_BYPASS_CLARITY` | 0,95 (sans unité) | Une mesure au moins aussi claire n’est jamais prise pour un pic |
+| $H$ | `HOLD_FRAMES` | 4 analyses | Analyses pendant lesquelles une nouvelle corde doit rester la plus proche avant d’être choisie |
+| $D$ | `DROPOUT_FRAMES` | 4 analyses | Analyses sans mesure pendant lesquelles la dernière corde est gardée |
+| $\Delta t$ | `UPDATE_INTERVAL` | 50 ms | Durée entre deux analyses |
 | - | `SAVER_INTERVAL` | 33 ms | Durée entre deux redessins en économie de batterie (30 images par seconde) |
 | $f_{A4}$ | `A4_DEFAULT`, `A4_MIN`, `A4_MAX` | 440 Hz (415 à 466 Hz) | Diapason de A4, et ses limites |
 | $m_k$ | `TUNINGS[].midi` | 40, 45, 50, 55, 59, 64 (guitare standard) | Numéro de note MIDI de chaque corde |
@@ -299,7 +315,7 @@ Les valeurs ci‑dessous sont celles du code : `PITCH_CONFIG` dans [pitch.js](pi
 | $C_c$ | `CAPTURE_CENTS` | 100 cents | Plus grande distance à laquelle une corde est considérée jouée, et marge de la bande de recherche |
 | $C_t$ | `IN_TUNE_CENTS` | 10 cents | Plus grand écart d’une corde accordée (vert) |
 | $N_c$ | `COLS` | 35 colonnes | Fixe la largeur du tracé ($W/N_c$) |
-| $N_r$ | `ROWS` | 30 lignes (environ 3 s d’historique) | Nombre de mesures gardées dans la cascade |
+| $N_r$ | `ROWS` | 60 lignes (environ 3 s d’historique) | Nombre de mesures gardées dans la cascade |
 | - | `LEVEL_WINDOW` | 4096 échantillons | Derniers échantillons utilisés pour le niveau du bouton microphone |
 | - | `LEVEL_MIN_DB` | -60 dBFS | Niveau d’entrée affiché en vert sur le bouton microphone |
 | - | `LEVEL_MAX_DB` | -10 dBFS | Niveau d’entrée affiché en rouge sur le bouton microphone |

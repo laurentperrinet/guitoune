@@ -555,7 +555,7 @@
 </dialog>
 <div id="liveStatus" class="srOnly" role="status" aria-live="polite"></div>
 <script type="module">
-import {PITCH_CONFIG, detectPitch, searchBand, centsBetween, createTracker, stringActivity, createActivityMeter} from './pitch.js';
+import {PITCH_CONFIG, detectPitch, searchBand, centsBetween, createTracker, createLevelGate, stringActivity, createActivityMeter} from './pitch.js';
 
 /*============== CONFIG =================*/
 // The parameters of the detection are in PITCH_CONFIG (pitch.js); the ones below are for the display.
@@ -567,8 +567,8 @@ const DSP_CONFIG = {
   A4_MIN          : 415,
   A4_MAX          : 466,
   COLS            : 35,
-  ROWS            : 30,
-  UPDATE_INTERVAL : 100,
+  ROWS            : 60,    // readings kept in the waterfall: 3 s at one analysis every 50 ms
+  UPDATE_INTERVAL : 50,    // time between two analyses (ms); a note is read about 30 ms after it starts instead of 60
   SAVER_INTERVAL  : 33,    // time between two redraws in battery saver mode (ms)
   LEVEL_WINDOW    : 4096,  // newest samples used for the level of the microphone button (samples)
   STRIP_WIDTH     : 16,    // width of each margin strip showing the energy at the other strings (CSS px)
@@ -868,6 +868,8 @@ let lastFadeTime = 0;   // time stamp of the last fade step (ms)
 const meter = createActivityMeter();   // noise floor of each string, see pitch.js
 // Spike filter on the readings and stable choice of the string, see createTracker in pitch.js
 const tracker = createTracker();
+// Noise floor of the room, so that a soft note is read and a steady hum is not, see createLevelGate in pitch.js
+const gate = createLevelGate();
 
 const micButton = document.getElementById('micButton');
 const startOverlay = document.getElementById('startOverlay');
@@ -917,6 +919,7 @@ function resetDisplay(){
   activeRow = -1;
   stripFade = STRINGS.map(() => 1);
   meter.reset();
+  gate.reset();
   tracker.reset();
   lastAnnouncement = '';
   STRINGS.forEach((s, idx) => setLabel(idx, s.name, 'var(--label)', ''));
@@ -1325,8 +1328,11 @@ function mainLoop(timestamp){
     // The raw reading goes through the tracker: a spike filter (a reading that jumps away from the median
     // of the last ones is replaced by it) and a stable choice of string, so that one doubtful analysis
     // neither jumps nor makes the label flicker
-    const reading = detectPitch(buf, audioCtx.sampleRate, searchHz);
-    const tracked = tracker.update(reading ? reading.freq : null, STRINGS, DSP_CONFIG.CAPTURE_CENTS);
+    // The level gate learns the noise floor of the room from the level of every window
+    const stats = {};
+    const reading = detectPitch(buf, audioCtx.sampleRate, {...searchHz, minRms: gate.threshold(), stats});
+    gate.update(stats.rms, seconds);
+    const tracked = tracker.update(reading ? reading.freq : null, STRINGS, DSP_CONFIG.CAPTURE_CENTS, reading ? reading.clarity : 0);
     const activeIdx = tracked.activeIdx;
     activeRow = activeIdx;   // kept while the last string is held, -1 when no string is detected
     // `held`: no reading this time, but the last string is kept for a moment (the labels stay)

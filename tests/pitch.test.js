@@ -5,7 +5,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {PITCH_CONFIG, fft, highPass, lowPass, windowLength, searchBand, detectPitch, centsBetween, createTracker,
-        stringActivity, createActivityMeter} from '../pitch.js';
+        createLevelGate, stringActivity, createActivityMeter} from '../pitch.js';
 import {SPECTRA, INSTRUMENTS, pluck, whiteNoise, firstPartial, centsError, rng, gaussian} from './synth.js';
 
 const CAPTURE_CENTS = 100;   // as DSP_CONFIG.CAPTURE_CENTS in index.html
@@ -219,7 +219,7 @@ test('centsBetween: an octave is 1200 cents, a semitone 100', () => {
 
 /*============== tracker ================*/
 const strings = [{freq: 110}, {freq: 110 * Math.pow(2, 100 / 1200)}];   // two strings one semitone apart
-const rawTracker = () => createTracker({...PITCH_CONFIG, MEDIAN_LENGTH: 1});
+const rawTracker = () => createTracker({...PITCH_CONFIG, MEDIAN_LENGTH: 1, HOLD_FRAMES: 2});
 
 test('tracker: the spike filter removes an isolated wrong reading', () => {
   const tracker = createTracker();
@@ -237,10 +237,20 @@ test('tracker: a pitch that changes smoothly is followed without delay', () => {
   }
 });
 
-test('tracker: a jump to another string is followed after one analysis', () => {
-  const tracker = createTracker(), far = [{freq: 110}, {freq: 146.83}];
-  const out = [110, 110, 110, 146.83, 146.83, 146.83].map(f => tracker.update(f, far, CAPTURE_CENTS).activeIdx);
-  assert.deepEqual(out, [0, 0, 0, 0, 1, 1]);
+test('tracker: a jump to another string waits for the median, unless the reading is very clear', () => {
+  const far = [{freq: 110}, {freq: 146.83}], wait = Math.floor(PITCH_CONFIG.MEDIAN_LENGTH / 2);
+  // Without a clarity, the new string is shown once it is the majority of the last readings
+  const tracker = createTracker();
+  const plain = [110, 110, 110, 110, 146.83, 146.83, 146.83, 146.83].map(f => tracker.update(f, far, CAPTURE_CENTS).activeIdx);
+  assert.deepEqual(plain.slice(4), [...Array(wait).fill(0), ...Array(4 - wait).fill(1)]);
+  // A reading that is clear enough to be a new note is shown at once
+  const fast = createTracker();
+  const clear = [110, 110, 110, 110, 146.83, 146.83].map(f => fast.update(f, far, CAPTURE_CENTS, 0.99).activeIdx);
+  assert.deepEqual(clear.slice(4), [1, 1]);
+  // ... but an octave jump that is only fairly clear is still taken for a spike
+  const spike = createTracker();
+  const octave = [110, 110, 110, 220, 110].map(f => spike.update(f, [{freq: 110}, {freq: 220}], CAPTURE_CENTS, 0.9));
+  assert.ok(Math.abs(octave[3].freq - 110) < 1e-9, `the octave jump gave ${octave[3].freq}`);
 });
 
 test('tracker: a new string needs two analyses in a row when the old one is still in range', () => {
@@ -256,11 +266,11 @@ test('tracker: the string changes at once when the old one is out of range', () 
   assert.deepEqual([110, 110, 220].map(f => tracker.update(f, far, CAPTURE_CENTS).activeIdx), [0, 0, 1]);
 });
 
-test('tracker: a gap of two analyses keeps the string, the third clears it, and the history restarts', () => {
-  const tracker = createTracker();
+test('tracker: a short gap keeps the string, the next analysis clears it, and the history restarts', () => {
+  const tracker = createTracker(), kept = PITCH_CONFIG.DROPOUT_FRAMES;
   tracker.update(110, strings, CAPTURE_CENTS); tracker.update(110, strings, CAPTURE_CENTS);
-  const gaps = [null, null, null].map(() => tracker.update(null, strings, CAPTURE_CENTS));
-  assert.deepEqual(gaps.map(g => [g.activeIdx, g.held]), [[0, true], [0, true], [-1, false]]);
+  const gaps = Array.from({length: kept + 1}, () => tracker.update(null, strings, CAPTURE_CENTS));
+  assert.deepEqual(gaps.map(g => [g.activeIdx, g.held]), [...Array(kept).fill([0, true]), [-1, false]]);
   const next = tracker.update(110.5, strings, CAPTURE_CENTS);
   assert.ok(Math.abs(next.freq - 110.5) < 1e-9, 'the median must not use the readings before the gap');
 });
@@ -348,4 +358,108 @@ test('activity meter: a digital silence gives 0 and is not taken for the noise f
   const values = meter.update([-20, -103], 0.1);
   assert.equal(values[0], 1);
   assert.equal(values[1], 0);
+});
+
+/*============== level gate ================*/
+// A room of white noise, then a note: what a user does. Returns what the gate lets through.
+function playInRoom({noise, level, gated, freq = 110, spectrum = SPECTRA.strong}){
+  const gate = createLevelGate(), band = searchBand(INSTRUMENTS.guitar, CAPTURE_CENTS);
+  for (let k = 0; k < 12; k++){     // 1.2 s of the room: the floor is learnt
+    const stats = {};
+    detectPitch(whiteNoise(16384, noise, 100 + k), 48000, {...band, minRms: gated ? gate.threshold() : undefined, stats});
+    gate.update(stats.rms, 0.1);
+  }
+  const signal = pluck({freq, spectrum, level, snrDb: 20 * Math.log10(level / noise), onset: 0.05, length: 16384, seed: 3});
+  return detectPitch(signal, 48000, {...band, minRms: gated ? gate.threshold() : undefined});
+}
+
+test('gate: a soft note is read in a quiet room, and with the fixed threshold it is not', () => {
+  // An RMS of 0.004 is below the fixed threshold of 0.005: nothing was read, on any string
+  for (const freq of INSTRUMENTS.guitar){
+    assert.equal(playInRoom({noise: 0.0005, level: 0.004, gated: false, freq}), null, `${freq} Hz, fixed threshold`);
+    const out = playInRoom({noise: 0.0005, level: 0.004, gated: true, freq});
+    assert.ok(out && Math.abs(centsError(out.freq, freq)) < 1, `${freq} Hz, gate`);
+  }
+});
+
+test('gate: a very soft note, -56 dBFS, is read too', () => {
+  const out = playInRoom({noise: 0.0003, level: 0.0015, gated: true, freq: 329.63});
+  assert.ok(out && Math.abs(centsError(out.freq, 329.63)) < 1);
+});
+
+test('gate: a steady hum is never taken for a note, which the fixed threshold did', () => {
+  // 150 Hz is near the D3 (146.8 Hz): +36 cents. Hum is the usual 3rd harmonic of the mains.
+  const band = searchBand(INSTRUMENTS.guitar, CAPTURE_CENTS), gate = createLevelGate();
+  let fixedReads = 0, gatedReads = 0;
+  for (let k = 0; k < 40; k++){
+    const hum = whiteNoise(16384, 0.0003, 200 + k).map((v, i) => v + 0.02 * Math.sin(2 * Math.PI * 150 * (i + k * 4800) / 48000));
+    if (detectPitch(hum, 48000, band)) fixedReads++;
+    const stats = {}, out = detectPitch(hum, 48000, {...band, minRms: gate.threshold(), stats});
+    gate.update(stats.rms, 0.1);
+    if (k >= 5 && out) gatedReads++;
+  }
+  assert.ok(fixedReads >= 35, `the fixed threshold read the hum ${fixedReads} times of 40`);
+  assert.equal(gatedReads, 0);
+});
+
+test('gate: before the floor is known the fixed threshold applies, and a note that is already sounding at the start is ignored until it dies away', () => {
+  const gate = createLevelGate(), band = searchBand(INSTRUMENTS.guitar, CAPTURE_CENTS);
+  assert.equal(gate.threshold(), PITCH_CONFIG.RMS_THRESHOLD);
+  const loud = pluck({freq: 196, level: 0.05, snrDb: 40, seed: 4}), stats = {};
+  assert.ok(detectPitch(loud, 48000, {...band, minRms: gate.threshold(), stats}), 'the first analysis reads it');
+  gate.update(stats.rms, 0.1);
+  assert.equal(detectPitch(loud, 48000, {...band, minRms: gate.threshold()}), null, 'the same note, steady, is now the floor');
+  // The note dies away, the floor follows it down at once, and the next note is read
+  gate.update(0.00001, 0.1);
+  assert.ok(detectPitch(loud, 48000, {...band, minRms: gate.threshold()}), 'then a new note is read');
+});
+
+test('gate: a hum that starts late is read for a few seconds, not for a minute', () => {
+  // 5 s of a quiet room, then a 150 Hz hum (near the D3) switches on and stays; one analysis every 50 ms.
+  // The floor follows a steady level 12 times faster: read for 8 s here, 74 s before.
+  const band = searchBand(INSTRUMENTS.guitar, CAPTURE_CENTS), gate = createLevelGate();
+  let lastRead = 0;
+  for (let f = 0; f < 400; f++){
+    const t0 = f * 0.05, hum = t0 >= 5;
+    const x = whiteNoise(16384, 0.0003, 400 + f).map((v, i) => v + (hum ? 0.02 * Math.sin(2 * Math.PI * 150 * (i + f * 2400) / 48000) : 0));
+    const stats = {}, out = detectPitch(x, 48000, {...band, minRms: gate.threshold(), stats});
+    gate.update(stats.rms, 0.05);
+    if (hum && out) lastRead = t0;
+  }
+  assert.ok(lastRead - 5 < 12, `read until ${(lastRead - 5).toFixed(1)} s after it started`);
+});
+
+test('gate: a note that rings for seconds is not mistaken for a steady sound', () => {
+  // A note that decays 2 dB per second (a decay of 0.1 times a normal string), read every 50 ms for 9 s.
+  // If it were taken for a steady sound, the floor would rise 12 times faster and close the gate after 7 s.
+  const band = searchBand(INSTRUMENTS.guitar, CAPTURE_CENTS), gate = createLevelGate();
+  const note = pluck({freq: 110, level: 0.02, snrDb: 40, decay: 0.1, length: 48000 * 10, onset: 0, seed: 8});
+  for (let j = 0; j < 12; j++){ const stats = {}; detectPitch(whiteNoise(16384, 0.0003, 700 + j), 48000, {...band, minRms: gate.threshold(), stats}); gate.update(stats.rms, 0.05); }
+  let read = 0, count = 0;
+  for (let end = 2400; end <= 48000 * 9; end += 2400){
+    const buffer = new Float32Array(16384), from = end - 16384;
+    for (let i = 0; i < 16384; i++) buffer[i] = from + i >= 0 ? note[from + i] : 0;
+    const stats = {}, out = detectPitch(buffer, 48000, {...band, minRms: gate.threshold(), stats});
+    gate.update(stats.rms, 0.05);
+    if (end >= 4800){ count++; if (out) read++; }
+  }
+  assert.ok(read >= 0.9 * count, `read in ${read} of ${count} analyses`);
+});
+
+test('gate: the threshold follows the noise, and is never below GATE_MIN_RMS', () => {
+  const gate = createLevelGate();
+  for (let k = 0; k < 10; k++) gate.update(0.002, 0.1);
+  assert.ok(Math.abs(gate.threshold() - PITCH_CONFIG.GATE_RATIO * 0.002) < 1e-6, `${gate.threshold()}`);
+  for (let k = 0; k < 10; k++) gate.update(1e-9, 0.1);     // a digital silence
+  assert.equal(gate.threshold(), PITCH_CONFIG.GATE_MIN_RMS);
+  gate.reset();
+  assert.equal(gate.threshold(), PITCH_CONFIG.RMS_THRESHOLD);
+});
+
+test('detectPitch gives the level of the window in options.stats, even without a reading', () => {
+  const stats = {};
+  assert.equal(detectPitch(whiteNoise(16384, 0.002, 1), 48000, {minFreq: 77, maxFreq: 350, stats}), null);
+  // The level is that of the filtered window: of white noise of 0.002, the share in 47-1047 Hz is a fifth
+  const expected = 0.002 * Math.sqrt((1048 - 47) / 24000);
+  assert.ok(Math.abs(stats.rms - expected) < 0.3 * expected, `${stats.rms} instead of about ${expected}`);
 });

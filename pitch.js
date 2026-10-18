@@ -31,15 +31,22 @@ export const PITCH_CONFIG = {
   SETTLE_SAMPLES  : 2048,   // samples filtered before the window, so that the filter has settled
   HP_RATIO        : 0.6,    // high-pass cut-off, as a fraction of the lowest searched frequency (no unit)
   LP_RATIO        : 3,      // low-pass cut-off, as a multiple of the highest searched frequency (no unit)
-  RMS_THRESHOLD   : 0.005,  // minimum level of the signal (full scale = 1)
+  RMS_THRESHOLD   : 0.005,  // level that a signal must reach while the noise floor is not known yet (full scale = 1)
+  GATE_RATIO      : 3,      // a signal must exceed the noise floor by this factor to be analysed (no unit)
+  GATE_MIN_RMS    : 0.0003, // lowest level ever analysed (full scale = 1)
+  GATE_RISE_DB    : 0.5,    // speed at which the noise floor rises towards a level that is not steady (dB per s)
+  GATE_STEADY_SECONDS: 2,   // a level is steady when it stays within GATE_STEADY_DB for this long (s)
+  GATE_STEADY_DB  : 2,      // spread of a steady level (dB)
+  GATE_STEADY_RISE_DB: 6,   // speed at which the noise floor rises towards a steady level (dB per s)
   CLARITY_MIN     : 0.8,    // minimum value of n(tau) at the chosen peak (no unit)
   PEAK_RATIO      : 0.97,   // a peak is accepted when n(tau) >= PEAK_RATIO * highest peak (no unit)
   MIN_FREQ        : 35,     // lowest searched frequency (Hz)
   MAX_FREQ        : 1000,   // highest searched frequency (Hz)
-  MEDIAN_LENGTH   : 3,      // latest readings whose median is the reference of the spike filter
+  MEDIAN_LENGTH   : 5,      // latest readings whose median is the reference of the spike filter
   SPIKE_CENTS     : 50,     // a reading farther than this from that median is replaced by it (cents)
-  HOLD_FRAMES     : 2,      // analyses a new string must stay the closest before it is selected
-  DROPOUT_FRAMES  : 2,      // analyses without a reading during which the last string is kept
+  SPIKE_BYPASS_CLARITY: 0.95, // a reading at least this clear is never taken for a spike (no unit)
+  HOLD_FRAMES     : 4,      // analyses a new string must stay the closest before it is selected
+  DROPOUT_FRAMES  : 4,      // analyses without a reading during which the last string is kept
   ACTIVITY_CENTS  : 60,     // half-width of the band, around a string, where its energy is looked for (cents)
   ACTIVITY_BINS   : 8,      // FFT bins wanted between the two closest strings: twice the half-width of the main lobe (no unit)
   ACTIVITY_SPAN_DB: 40,     // range between the noise floor of a string and its full activity (dB)
@@ -174,6 +181,9 @@ export function searchBand(freqs, captureCents){
  *   options.minFreq, options.maxFreq: searched band (Hz), default MIN_FREQ and MAX_FREQ.
  *   options.length: number of samples to analyse, default windowLength() for minFreq.
  *   options.filter: false to skip the high-pass and low-pass filters (tests only), default true.
+ *   options.minRms: level (RMS, full scale = 1) below which the signal is ignored, default RMS_THRESHOLD;
+ *     createLevelGate() gives it from the noise floor.
+ *   options.stats: an object that receives {rms}, the level of the window, even when there is no reading.
  * Returns: {freq (Hz), clarity (0..1)} or null when the signal is too quiet or not periodic. */
 export function detectPitch(buf, sampleRate, options = {}){
   const minFreq = options.minFreq ?? PITCH_CONFIG.MIN_FREQ;
@@ -212,7 +222,9 @@ export function detectPitch(buf, sampleRate, options = {}){
     re[i] = v;
     energy += v * v;
   }
-  if (Math.sqrt(energy / n) < PITCH_CONFIG.RMS_THRESHOLD) return null;
+  const rms = Math.sqrt(energy / n);
+  if (options.stats) options.stats.rms = rms;
+  if (rms < (options.minRms ?? PITCH_CONFIG.RMS_THRESHOLD)) return null;
   re.fill(0, n);
   im.fill(0);
 
@@ -351,6 +363,43 @@ export function createActivityMeter(config = PITCH_CONFIG){
   return {update, reset};
 }
 
+/* Level gate: a signal is analysed only when it is clearly above the noise floor, and that floor is not a
+ * fixed level. With a fixed one, a soft note was never read (nothing at all, on any string, at an RMS of
+ * 0.004 against a threshold of 0.005), and the E4, which is quieter at the microphone than the other
+ * strings, is the first to be lost. A steady sound (hum, a fan) raises the floor and is never taken for
+ * a note: a 150 Hz hum read as the D3 in every analysis with the fixed threshold.
+ * The floor follows the lowest level seen, at once downwards and slowly upwards (GATE_RISE_DB per second),
+ * but fast (GATE_STEADY_RISE_DB) towards a level that has not moved by more than GATE_STEADY_DB for
+ * GATE_STEADY_SECONDS: a note decays, a hum or a fan does not. Without that, a hum that started after the
+ * floor was learnt was read as a note for as long as a minute and a half.
+ * It starts at the first level measured: a note that is already sounding at that moment is ignored until
+ * it has died away (a cap on the initial floor, so that it would be read, let a steady hum be read as a
+ * note for half a minute). The level is that of the filtered window, in the band that is searched.
+ * threshold() gives the level to pass to detectPitch() as options.minRms; update(rms, seconds) takes the
+ * level of the window (options.stats.rms) and the time since the previous call (s). */
+export function createLevelGate(config = PITCH_CONFIG){
+  let floorDb = null;
+  let recent = [];   // {db, seconds} over the last GATE_STEADY_SECONDS
+  return {
+    threshold(){
+      if (floorDb === null) return config.RMS_THRESHOLD;
+      return Math.max(config.GATE_MIN_RMS, config.GATE_RATIO * Math.pow(10, floorDb / 20));
+    },
+    update(rms, seconds){
+      if (rms === undefined) return;
+      const db = 20 * Math.log10(rms + 1e-9);
+      recent.push({db, seconds});
+      let span = recent.reduce((sum, r) => sum + r.seconds, 0);
+      while (recent.length > 1 && span - recent[0].seconds >= config.GATE_STEADY_SECONDS) span -= recent.shift().seconds;
+      const levels = recent.map(r => r.db);
+      const steady = span >= config.GATE_STEADY_SECONDS && Math.max(...levels) - Math.min(...levels) <= config.GATE_STEADY_DB;
+      if (floorDb === null || db < floorDb) floorDb = db;
+      else floorDb += Math.min(db - floorDb, (steady ? config.GATE_STEADY_RISE_DB : config.GATE_RISE_DB) * seconds);
+    },
+    reset(){ floorDb = null; recent = []; }
+  };
+}
+
 /*============== STRINGS AND TRACKING =================*/
 export function centsBetween(freq, reference){
   return 1200 * Math.log2(freq / reference);
@@ -369,7 +418,12 @@ function median(values){
  *   - a string is selected only when it stays the closest for HOLD_FRAMES analyses in a row,
  *     unless there is none yet or the current one is out of range;
  *   - a short gap without a reading keeps the last string for DROPOUT_FRAMES analyses.
- * update(freq, strings, captureCents) returns {freq, activeIdx, held}:
+ * The counts are numbers of analyses: with one analysis every 50 ms, MEDIAN_LENGTH 5, HOLD_FRAMES 4 and
+ * DROPOUT_FRAMES 4 last 250, 200 and 200 ms. A reading whose clarity is at least SPIKE_BYPASS_CLARITY is
+ * never replaced: a new string plucked while the previous one rings is then shown without waiting for the
+ * median (113 instead of 188 ms for the E4 then the A2).
+ * update(freq, strings, captureCents, clarity) returns {freq, activeIdx, held}:
+ *   clarity: of the reading, 0 when unknown;
  *   freq: frequency (Hz) after the spike filter, or null; activeIdx: index in `strings` (objects with a
  *   `freq`), or -1; held: true when there was no reading and the last string is kept. */
 export function createTracker(config = PITCH_CONFIG){
@@ -393,7 +447,7 @@ export function createTracker(config = PITCH_CONFIG){
     return best <= captureCents ? idx : -1;
   }
 
-  function update(freq, strings, captureCents){
+  function update(freq, strings, captureCents, clarity = 0){
     if (freq === null || freq === undefined){
       misses++;
       if (current >= 0 && misses <= config.DROPOUT_FRAMES) return {freq: lastFreq, activeIdx: current, held: true};
@@ -405,7 +459,8 @@ export function createTracker(config = PITCH_CONFIG){
     if (recent.length > config.MEDIAN_LENGTH) recent.shift();
     // The latest reading, unless it jumps away from the median of the last ones
     const middle = median(recent);
-    const spiked = recent.length >= 3 && Math.abs(centsBetween(freq, middle)) > config.SPIKE_CENTS;
+    // A very clear reading is a new note, not a spike: wrong readings (octave jumps) have a clarity of 0.9 or less
+    const spiked = recent.length >= 3 && clarity < config.SPIKE_BYPASS_CLARITY && Math.abs(centsBetween(freq, middle)) > config.SPIKE_CENTS;
     const smoothed = spiked ? middle : freq;
     lastFreq = smoothed;
 
