@@ -7,6 +7,17 @@ aucune des versions précédentes n’a été étiquetée.
 
 ## 2026-10-18, un seuil relatif au bruit, pis une mesure aux 50 ms
 
+### Partagé sur les réseaux sociaux
+
+* 🇬🇧 [Bluesky, annonce](https://bsky.app/profile/laurentperrinet.bsky.social/post/3my66ezvf7k2s)
+* 🇫🇷 [Bluesky, annonce](https://bsky.app/profile/laurentperrinet.bsky.social/post/3my66gr7bwk2s)
+* 🇬🇧 [Mastodon (neuromatch.social), annonce](https://neuromatch.social/@laurentperrinet/117463933759174531)
+* 🇫🇷 [Mastodon (neuromatch.social), annonce](https://neuromatch.social/@laurentperrinet/117463926472506339)
+* 🇬🇧 [Facebook, annonce](https://www.facebook.com/laurentperrinet/posts/pfbid023yCu6jqAvzFXN8Y6FMprmwvFQhtqq5fcN5Lr6v8ZnyBWHdiAhjvUB39nBPVPMTowl)
+* 🇬🇧 [Reddit, commentaire dans r/Guitar](https://www.reddit.com/r/Guitar/comments/186blxg/comment/phjcdb2/)
+* 🇬🇧 [Reddit, commentaire dans r/guitars](https://www.reddit.com/r/guitars/comments/1e0kiwj/comment/phjbt90/)
+* 🇬🇧 [Reddit, commentaire dans r/guitarlessons](https://www.reddit.com/r/guitarlessons/comments/z2imsy/comment/phjbh6j/)
+
 ### Modifié
 - Le signal est analysé quand il dépasse de 3 fois le bruit de fond de la pièce, pas un niveau fixe de 0,005. Dans une pièce tranquille, une note douce est lue (un niveau efficace de 0,004 n’était lu sur aucune corde, pis G3, B3 pis E4 étaient perdues les premières) ; un son stable comme un ronflement est jamais pris pour une note (un ronflement à 150 Hz était lu comme le D3 à chaque analyse).
 - Un niveau stable fait monter le plancher 12 fois plus vite (6 dB par seconde au lieu de 0,5) : un ronflement apparu après l’apprentissage du plancher était lu pendant 74 s, astheure il l’est pendant 8 s.
@@ -243,6 +254,7 @@ Le module se trompe donc cinq fois moins souvent, mais il lit moins de notes fai
 
 ## 2026-01-06 à 2026-01-25
 
+- 🇬🇧 [Bluesky, annonce initiale](https://bsky.app/profile/laurentperrinet.bsky.social/post/3mdbmsoynnk2n)
 - Fenêtre de Hann, paramètres de traitement du signal pis réglages de mise en page ; panneau de débogage,
   puis simplifié ([`e65b032`](https://github.com/laurentperrinet/guitoune/commit/e65b032), [`2449c6a`](https://github.com/laurentperrinet/guitoune/commit/2449c6a), [`0975697`](https://github.com/laurentperrinet/guitoune/commit/0975697), [`6bda292`](https://github.com/laurentperrinet/guitoune/commit/6bda292)).
 - README avec une version française pis une image de démonstration ([`be205cc`](https://github.com/laurentperrinet/guitoune/commit/be205cc), [`3be8907`](https://github.com/laurentperrinet/guitoune/commit/3be8907), [`dae13e3`](https://github.com/laurentperrinet/guitoune/commit/dae13e3),
