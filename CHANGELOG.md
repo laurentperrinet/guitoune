@@ -7,6 +7,17 @@ versions was tagged.
 
 ## 2026-10-18, a threshold relative to the noise, and a reading every 50 ms
 
+### Shared on social media
+
+* 🇬🇧 [Bluesky, announcement](https://bsky.app/profile/laurentperrinet.bsky.social/post/3my66ezvf7k2s)
+* 🇫🇷 [Bluesky, announcement](https://bsky.app/profile/laurentperrinet.bsky.social/post/3my66gr7bwk2s)
+* 🇬🇧 [Mastodon (neuromatch.social), announcement](https://neuromatch.social/@laurentperrinet/117463933759174531)
+* 🇫🇷 [Mastodon (neuromatch.social), announcement](https://neuromatch.social/@laurentperrinet/117463926472506339)
+* 🇬🇧 [Facebook, announcement](https://www.facebook.com/laurentperrinet/posts/pfbid023yCu6jqAvzFXN8Y6FMprmwvFQhtqq5fcN5Lr6v8ZnyBWHdiAhjvUB39nBPVPMTowl)
+* 🇬🇧 [Reddit, comment in r/Guitar](https://www.reddit.com/r/Guitar/comments/186blxg/comment/phjcdb2/)
+* 🇬🇧 [Reddit, comment in r/guitars](https://www.reddit.com/r/guitars/comments/1e0kiwj/comment/phjbt90/)
+* 🇬🇧 [Reddit, comment in r/guitarlessons](https://www.reddit.com/r/guitarlessons/comments/z2imsy/comment/phjbh6j/)
+
 ### Changed
 - The signal is analysed when it is 3 times above the noise floor of the room, not above a fixed level of 0.005. In a quiet room a soft note is read (an RMS of 0.004 was never read, on any string, and G3, B3 and E4 were lost first); a steady sound such as a hum is never taken for a note (a 150 Hz hum was read as the D3 in every analysis).
 - A steady level makes the floor rise 12 times faster (6 dB per second instead of 0.5): a hum that started after the floor was learnt was read for 74 s, and is read for 8 s now.
@@ -229,6 +240,7 @@ So the module is wrong five times less often, but it reads fewer faint or fast-d
 
 ## 2026-01-06 to 2026-01-25
 
+- 🇬🇧 [Bluesky, first announcement](https://bsky.app/profile/laurentperrinet.bsky.social/post/3mdbmsoynnk2n)
 - Hann window, DSP parameters and layout adjustments; debug panel, then simplified ([`e65b032`](https://github.com/laurentperrinet/guitoune/commit/e65b032),
   [`2449c6a`](https://github.com/laurentperrinet/guitoune/commit/2449c6a), [`0975697`](https://github.com/laurentperrinet/guitoune/commit/0975697), [`6bda292`](https://github.com/laurentperrinet/guitoune/commit/6bda292)).
 - README with a French version and a demo image ([`be205cc`](https://github.com/laurentperrinet/guitoune/commit/be205cc), [`3be8907`](https://github.com/laurentperrinet/guitoune/commit/3be8907), [`dae13e3`](https://github.com/laurentperrinet/guitoune/commit/dae13e3), [`61c5283`](https://github.com/laurentperrinet/guitoune/commit/61c5283)).
