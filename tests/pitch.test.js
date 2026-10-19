@@ -229,7 +229,8 @@ test('tracker: the spike filter removes an isolated wrong reading', () => {
 });
 
 test('tracker: a pitch that changes smoothly is followed without delay', () => {
-  // A peg turned at 60 cents per second: 6 cents between two analyses. A plain median of 3 would lag by one analysis.
+  // A peg turned fast: 6 cents between two analyses (120 cents per second at one analysis every 50 ms).
+  // A plain median of 5 readings would lag by two analyses.
   const tracker = createTracker(), one = [{freq: 110}];
   for (let k = 0; k < 10; k++){
     const freq = 110 * Math.pow(2, (-45 + 6 * k) / 1200);

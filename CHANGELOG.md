@@ -22,7 +22,7 @@ versions was tagged.
 - The signal is analysed when it is 3 times above the noise floor of the room, not above a fixed level of 0.005. In a quiet room a soft note is read (an RMS of 0.004 was never read, on any string, and G3, B3 and E4 were lost first); a steady sound such as a hum is never taken for a note (a 150 Hz hum was read as the D3 in every analysis).
 - A steady level makes the floor rise 12 times faster (6 dB per second instead of 0.5): a hum that started after the floor was learnt was read for 74 s, and is read for 8 s now.
 - One analysis every 50 ms instead of 100 ms, and 60 rows of history to keep 3 s: a note is read 31 ms after it starts instead of 63 for the E4 (67 instead of 88 for the E2). The counts of the tracker follow: a median of 5, 4 analyses to change string, 4 to keep a string through a gap.
-- A reading at least 0.95 clear is never taken for a spike, so that a string plucked while the previous one rings is shown at once: 113 ms instead of 188 for the E4 then the A2.
+- A reading at least 0.95 clear is never taken for a spike, so that a string plucked while the previous one rings is shown at once: 94 ms instead of 152 for the E4 then the A2.
 
 ### Notes
 - The trouble with the E4 was not reproduced on synthetic strings, which read the E4 as fast as the others. The fixed threshold is the likeliest cause: that string is quieter at the microphone and dies away sooner, and the automatic gain of the microphone is switched off.

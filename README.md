@@ -53,7 +53,7 @@ Why need an app when you can do it online?
   - Search band derived from the tuning, high-pass and low-pass filters, no window: robust to mains hum, constant offsets, broadband noise, the click of the attack and low-frequency rumble
   - Sensitivity relative to the noise floor of the room: a soft note is read in a quiet room, and a steady hum or fan is never taken for a note
   - Spike filter and stable choice of the string, so that the label does not flicker
-  - Error at most 0.2 cent on ideal harmonic tones; measured on synthetic strings only, see the [CHANGELOG](CHANGELOG.md)
+  - Error at most 0.2 cent on ideal harmonic tones of a guitar (0.6 cent for the E1 of a bass); measured on synthetic strings only, see the [CHANGELOG](CHANGELOG.md)
   - No echo cancellation, noise suppression or automatic gain control: they attenuate sustained notes
 - **Visual feedback**:
   - Colour-coded waterfall display: gradient cells that glide upwards
@@ -172,9 +172,9 @@ The tests need Node 20 or later and no package: `npm test`. They are run on ever
 
 ---
 
-## License
+## Licence
 
-[AGPLv3 License](LICENSE) – see the `LICENSE` file for details. US citizens supporting MAGA must be accompanied by an adult.
+[AGPLv3 Licence](LICENSE) – see the `LICENSE` file for details. US citizens supporting MAGA must be accompanied by an adult.
 
 
 ---
@@ -236,7 +236,7 @@ Pourquoi avoir besoin d’une application quand vous pouvez le faire en ligne ?
   - Bande de recherche déduite de l’accordage, filtres passe‑haut et passe‑bas, pas de fenêtre : robuste au ronflement du secteur, aux décalages continus, au bruit large bande, au claquement de l’attaque et aux grondements basse fréquence  
   - Sensibilité relative au bruit de fond de la pièce : une note douce est lue dans une pièce calme, et un ronflement ou un ventilateur constant n’est jamais pris pour une note  
   - Filtre anti‑pic et choix stable de la corde, pour que l’étiquette ne clignote pas  
-  - Erreur d’au plus 0,2 cent sur des sons harmoniques idéaux ; mesurée sur des cordes synthétiques seulement, voir le [CHANGELOG](CHANGELOG.fr.md)  
+  - Erreur d’au plus 0,2 cent sur des sons harmoniques idéaux de guitare (0,6 cent pour le E1 d’une basse) ; mesurée sur des cordes synthétiques seulement, voir le [CHANGELOG](CHANGELOG.fr.md)  
   - Ni annulation d’écho, ni suppression de bruit, ni contrôle automatique de gain : ils atténuent les notes tenues  
 - **Retour visuel** :
   - Affichage en cascade coloré : cases en dégradé qui glissent vers le haut  

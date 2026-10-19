@@ -17,7 +17,7 @@
  *   - a high-pass filter is applied first: a low-frequency rumble keeps n(tau) positive over the
  *     whole search range, and no peak is found at all;
  *   - a low-pass filter follows: without it, a noise at 15 dB below the note gave a 4 cents error
- *     (1 cent with it), nearly half of the notes at 12 dB or less were not read, and the broadband
+ *     (0.4 cent with it), nearly half of the notes at 12 dB or less were not read, and the broadband
  *     click of the attack of the string made the period read one octave too low: it lowers n(tau) at the
  *     true period (about 0.76 instead of 1) and leaves it a little higher at twice the period;
  *   - CLARITY_MIN is high (0.8): with the low-pass, noisy notes are read again, and some of them wrongly;
@@ -414,14 +414,15 @@ function median(values){
  *   - a spike filter removes isolated wrong readings (octave jumps, tails of notes): the latest reading
  *     is kept, unless it is farther than SPIKE_CENTS from the median of the last MEDIAN_LENGTH ones, which
  *     is then used instead. A plain median would do the same, but delays the display by about 90 ms
- *     (131 ms instead of 40 ms while a peg is turned at 20 cents per second);
+ *     (131 ms instead of 40 ms while a peg is turned at 20 cents per second, with a median of 3 readings
+ *     at 100 ms);
  *   - a string is selected only when it stays the closest for HOLD_FRAMES analyses in a row,
  *     unless there is none yet or the current one is out of range;
  *   - a short gap without a reading keeps the last string for DROPOUT_FRAMES analyses.
  * The counts are numbers of analyses: with one analysis every 50 ms, MEDIAN_LENGTH 5, HOLD_FRAMES 4 and
  * DROPOUT_FRAMES 4 last 250, 200 and 200 ms. A reading whose clarity is at least SPIKE_BYPASS_CLARITY is
  * never replaced: a new string plucked while the previous one rings is then shown without waiting for the
- * median (113 instead of 188 ms for the E4 then the A2).
+ * median (94 instead of 152 ms for the E4 then the A2).
  * update(freq, strings, captureCents, clarity) returns {freq, activeIdx, held}:
  *   clarity: of the reading, 0 when unknown;
  *   freq: frequency (Hz) after the spike filter, or null; activeIdx: index in `strings` (objects with a
